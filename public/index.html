@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Enhanced Log Monitor</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="header">
+      <h1>Enhanced Log Monitor</h1>
+    </div>
+
+    <div class="stats">
+      <h2>Statistics</h2>
+      <div>Total Lines: <span id="total-lines">0</span></div>
+      <div>Error Count: <span id="error-count">0</span></div>
+      <div>Warning Count: <span id="warning-count">0</span></div>
+      <div>Update Interval: <span id="update-interval">0</span>ms</div>
+    </div>
+
+    <div class="search-container">
+      <input type="text" id="search-input" placeholder="Search logs..." onkeyup="filterLogs()"/>
+      <div class="filter-buttons">
+        <button class="filter-button active" onclick="toggleFilter('all')">All</button>
+        <button class="filter-button active" onclick="toggleFilter('ERROR')">Errors</button>
+        <button class="filter-button active" onclick="toggleFilter('WARNING')">Warnings</button>
+        <button class="filter-button active" onclick="toggleFilter('INFO')">Info</button>
+      </div>
+    </div>
+
+    <div id="message-container"></div>
+
+    <script>
+      const socket = io();
+      const messageContainer = document.getElementById("message-container");
+      let allLogs = [];
+      let activeFilters = ["all", "ERROR", "WARNING", "INFO"];
+
+      function updateStats(stats) {
+        document.getElementById("total-lines").textContent = stats.totalLines;
+        document.getElementById("error-count").textContent = stats.errorCount;
+        document.getElementById("warning-count").textContent = stats.warningCount;
+        document.getElementById("update-interval").textContent = 
+            Math.round(stats.averageUpdateInterval);
+      }
+
+      function getLogType(log) {
+        const logString = typeof log === "object" ? log.content : String(log);
+        if (logString.includes("[ERROR]")) return "ERROR";
+        if (logString.includes("[WARNING]")) return "WARNING";
+        return "INFO";
+      }
+
+      function appendLog(log) {
+        const div = document.createElement("div");
+        const logString = typeof log === "object" ? log.content : String(log);
+        const type = getLogType(logString);
+        div.className = `log-entry ${type.toLowerCase()}`;
+        div.textContent = logString;
+
+        div.style.display = 
+            activeFilters.includes(type) || activeFilters.includes("all") ? "" : "none";
+
+        messageContainer.appendChild(div);
+        messageContainer.scrollTop = messageContainer.scrollHeight;
+      }
+
+      function filterLogs() {
+        const searchTerm = document.getElementById("search-input").value.toLowerCase();
+        const logEntries = messageContainer.getElementsByClassName("log-entry");
+
+        Array.from(logEntries).forEach((entry) => {
+          const type = getLogType(entry.textContent);
+          const matchesSearch = entry.textContent.toLowerCase().includes(searchTerm);
+          const matchesFilter = activeFilters.includes(type) || activeFilters.includes("all");
+          entry.style.display = matchesSearch && matchesFilter ? "" : "none";
+        });
+      }
+
+      function toggleFilter(filter) {
+        const button = document.querySelector(`[onclick="toggleFilter('${filter}')"]`);
+        button.classList.toggle("active");
+
+        if (filter === "all") {
+          if (button.classList.contains("active")) {
+            activeFilters = ["all", "ERROR", "WARNING", "INFO"];
+            document.querySelectorAll(".filter-button")
+                .forEach((btn) => btn.classList.add("active"));
+          } else {
+            activeFilters = [];
+            document.querySelectorAll(".filter-button")
+                .forEach((btn) => btn.classList.remove("active"));
+          }
+        } else {
+          if (button.classList.contains("active")) {
+            if (!activeFilters.includes(filter)) activeFilters.push(filter);
+          } else {
+            activeFilters = activeFilters.filter((f) => f !== filter);
+          }
+
+          const allTypesSelected = ["ERROR", "WARNING", "INFO"]
+              .every((type) => activeFilters.includes(type));
+          document.querySelector("[onclick=\"toggleFilter('all')\"]")
+              .classList.toggle("active", allTypesSelected);
+          if (allTypesSelected && !activeFilters.includes("all")) activeFilters.push("all");
+          if (!allTypesSelected) activeFilters = activeFilters.filter((f) => f !== "all");
+        }
+
+        filterLogs();
+      }
+
+      socket.on("connect", () => {
+        console.log("Connected to server");
+      });
+
+      socket.on("init", function (data) {
+        console.log("Received init data:", data);
+        messageContainer.innerHTML = "";
+        allLogs = data.lines;
+        data.lines.forEach((log) => appendLog(log));
+        updateStats(data.stats);
+      });
+
+      socket.on("update-log", function (data) {
+        console.log("Received update data:", data);
+        data.lines.forEach((log) => {
+          allLogs.push(log);
+          appendLog(log);
+        });
+        updateStats(data.stats);
+      });
+    </script>
+  </body>
+</html>
