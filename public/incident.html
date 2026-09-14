@@ -230,8 +230,8 @@ input { font: inherit; }
             <button type="button" class="btn" id="b-ack">Acknowledge</button>
             <button type="button" class="btn" id="b-respond">Mark responded</button>
             <button type="button" class="btn" id="b-note">Add note</button>
+            <button type="button" class="btn" id="b-improve">Record improvement</button>
             <button type="button" class="btn close" id="b-close">Close</button>
-            <a id="a-raw" target="_blank" rel="noopener">raw JSON bundle ↗</a>
           </div>
           <div class="acts-row report">
             <button type="button" class="btn small" id="b-triage" hidden>Ask Claude for an analysis</button>
@@ -239,6 +239,8 @@ input { font: inherit; }
             <span class="sep" id="report-sep" hidden>·</span>
             <a id="a-report" target="_blank" rel="noopener">Incident report ↗</a>
             <button type="button" class="btn small" id="b-report">Report sent</button>
+            <span class="sep" id="raw-sep">·</span>
+            <a id="a-raw" target="_blank" rel="noopener">raw JSON bundle ↗</a>
           </div>
           <form class="note-row" id="note-row" hidden>
             <input id="note-text" autocomplete="off" placeholder="Add a note to the audit trail">
@@ -275,6 +277,11 @@ input { font: inherit; }
             <button type="button" class="btn small" id="b-use-draft">Use as response note</button>
             <button type="button" class="btn plain small" id="b-discard">Discard</button>
           </div>
+        </div>
+
+        <div class="card trail" id="changes-card" hidden>
+          <div class="card-head"><span>what changed in Zero because of this</span></div>
+          <div id="changes"></div>
         </div>
 
         <div class="card trail">

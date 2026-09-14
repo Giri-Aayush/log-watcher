@@ -1,7 +1,8 @@
 // Incident detail page for the collector. Reads /api/incidents/:id (plus the
 // page-time bundle, the node's heartbeat series and the open-incident count)
 // every 3 s, ticks the clock and the open stage's duration once a second, and
-// posts ack / respond / note / close / report. Plain DOM, no framework.
+// posts ack / respond / note / close / report / improvement and asks the
+// collector for an analysis. Plain DOM, no framework.
 // Everything on the page comes from those responses except the engineer's
 // name (localStorage) and the wall clock.
 (() => {
@@ -24,6 +25,7 @@
     note: { placeholder: 'Add a note to the audit trail', submit: 'Save note' },
     respond: { placeholder: 'What did you tell the operator?', submit: 'Mark responded' },
     close: { placeholder: 'Reason for closing', submit: 'Close incident' },
+    improvement: { placeholder: 'What changed in Zero because of this? (detector, threshold, runbook, upstream PR)', submit: 'Record improvement' },
   };
   // label in the text -> row label, row style. The collector's analysis adds
   // Assessment at the top and Confidence at the end; the sidecar's has the middle four.
@@ -310,7 +312,7 @@
     const floor = Math.max(1, total * MIN_SEG_SHARE);
     const weights = known.map((d) => Math.max(d == null ? 0 : d, floor));
 
-    const onsetCap = ONSET_CAPTION[inc.key] || (inc.key.startsWith('gbt_') ? 'first failed template' : network ? 'earliest member onset' : 'condition began');
+    const onsetCap = ONSET_CAPTION[inc.key] || (inc.key.startsWith('gbt_') ? 'first failed template' : network ? 'earliest onset' : 'condition began');
     const respondNote = (inc.notes || []).some((n) => n.action === 'respond' && n.text);
     const resolvedCap = inc.resolvedAt ? (inc.closedBy ? 'closed by ' + inc.closedBy : inc.resolvedDetail || 'resolved') : 'open';
     const html = stageHTML('onset', 'crit', L.onset, onsetCap, network ? onsetCap : onsetCap + ' · sidecar ' + isoTitle(inc.onsetAt))
@@ -341,7 +343,7 @@
     set('b-report', !!inc.reportSentAt, inc.reportSentAt ? 'Report sent · ' + (inc.reportSentBy || '?') : 'Report sent');
     $('b-report').title = inc.reportSentAt ? isoTitle(inc.reportSentAt) : 'record that the incident report went to the customer';
     setHref('a-report', '/api/incidents/' + encodeURIComponent(inc.id) + '/report');
-    $('a-raw').hidden = !inc.bundleFile;
+    $('a-raw').hidden = !inc.bundleFile; $('raw-sep').hidden = !inc.bundleFile;
     if (inc.bundleFile) setHref('a-raw', bundleHref(inc.bundleFile));
     renderTriageButton(inc);
     renderNoteBox();
@@ -579,6 +581,7 @@
         case 'note': row.verb = 'noted'; row.text = q(n.text); break;
         case 'report': row.verb = 'sent the incident report'; break;
         case 'triage': row.verb = 'asked Claude for an analysis'; break;
+        case 'improvement': row.verb = 'recorded an improvement'; row.text = q(n.text); break;
         default: row.verb = esc(n.action); row.text = q(n.text);
       }
       rows.push(row);
@@ -590,6 +593,14 @@
       + '<span class="what"><span class="verb">' + r.verb + '</span>' + (r.text ? ' ' + r.text : '') + '</span></div>').join('')
       : '<div class="empty">nothing recorded yet</div>';
     setHTML('trail', $('trail'), html);
+
+    // what changed in Zero because of this incident, above the trail
+    const changes = inc.improvements || [];
+    $('changes-card').hidden = !changes.length;
+    setHTML('changes', $('changes'), changes.map((c) =>
+      '<div class="trail-row"><span class="t" title="' + esc(isoTitle(c.at)) + '">' + esc(hms(c.at)) + '</span>'
+      + '<span class="who" title="' + esc(c.by || '?') + '">' + esc(c.by || '?') + '</span>'
+      + '<span class="what">' + esc(c.text) + '</span></div>').join(''));
   }
 
   // ---- evidence, members, snapshot, raw links ---------------------------------
@@ -712,6 +723,7 @@
   $('b-respond').addEventListener('click', () => openNote('respond'));
   $('b-close').addEventListener('click', () => openNote('close'));
   $('b-note').addEventListener('click', () => (state.note.open && state.note.mode === 'note' ? closeNote() : openNote('note')));
+  $('b-improve').addEventListener('click', () => (state.note.open && state.note.mode === 'improvement' ? closeNote() : openNote('improvement')));
   $('note-cancel').addEventListener('click', closeNote);
   $('note-text').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); $('note-row').requestSubmit(); }
@@ -721,7 +733,7 @@
     e.preventDefault();
     const mode = state.note.mode;
     const text = $('note-text').value;
-    if (mode === 'note' && !text.trim()) { $('note-text').focus(); return; }
+    if ((mode === 'note' || mode === 'improvement') && !text.trim()) { $('note-text').focus(); return; }
     const ok = await act(mode, text, $('note-submit'));
     $('note-submit').disabled = false;
     if (ok) closeNote();
