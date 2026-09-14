@@ -337,3 +337,31 @@ test('a sidecar restart neither duplicates a persisting incident nor leaves a va
   assert.equal(now[0].id, 'pool-1-tip_stalled-2026-09-14T11-51');
   assert.match(h.store.incidents.get('pool-1-tip_stalled-2026-09-14T11-50').resolvedDetail, /superseded/);
 });
+
+test('scope and confidence: node-local when peers on the network are fine; unknown when there is nothing to compare', () => {
+  const h = harness();
+  const beat = (label, seq, network) => h.store.ingest({ phase: 'HEARTBEAT', label, seq, sentAt: h.now(), sidecar: { startedAt: 1 }, at: h.now(), node: { network }, tip: { height: 1, at: h.now() }, rpc: { ok: true, ms: 1 }, activeAlerts: [] });
+  beat('solo', 1, 'Testnet');
+  const alone = h.store.ingest({ phase: 'NEW', label: 'solo', alert: { ...stall('solo-1'), evidence: { height: 1, confirmedOverRpc: true }, firstSeen: h.now() }, bundle: { label: 'solo', logs: [], node: { network: 'Testnet' } } });
+  assert.equal(alone.scope, 'unknown');
+  assert.match(alone.scopeNote, /only node watched on Testnet/);
+  beat('m1', 1, 'Mainnet'); beat('m2', 1, 'Mainnet'); beat('m3', 1, 'Mainnet');
+  const local = h.store.ingest({ phase: 'NEW', label: 'm1', alert: { ...stall('m1-1'), evidence: { height: 1, confirmedOverRpc: true }, firstSeen: h.now() }, bundle: { label: 'm1', logs: [], node: { network: 'Mainnet' } } });
+  assert.equal(local.scope, 'node');
+  assert.equal(local.confidence, 'high');
+  assert.match(local.scopeNote, /2 other Mainnet nodes fine for tip_stalled; confirmed over RPC/);
+  assert.equal(h.store.triageContext(local).scope.scope, 'node');
+});
+
+test('close reasons feed a per-detector precision table', () => {
+  const h = harness();
+  h.alert('NEW', stall('a'));
+  h.alert('NEW', { ...stall('b'), key: 'peers_low' });
+  h.alert('NEW', { ...stall('c'), key: 'peers_low' });
+  h.store.act('a', 'close', { by: 'aayush', text: 'fixed: restarted zebrad' });
+  h.store.act('b', 'close', { by: 'aayush', text: 'false positive: peers recovered before anyone looked' });
+  h.store.act('c', 'close', { by: 'aayush', text: 'expected: known flaky ISP' });
+  const q = h.store.analytics().quality;
+  assert.deepEqual(q.map((x) => [x.key, x.closed, x.precision]), [['peers_low', 2, 0], ['tip_stalled', 1, 1]]);
+  assert.equal(h.store.incidents.get('b').closeReason, 'false_positive');
+});

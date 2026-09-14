@@ -79,7 +79,27 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
     try { return new URL(cfg.sinks.webhookUrl).origin; } catch { return null; }
   }
 
-  detectors.on('alert', (a) => alerts.raise(a));
+  // A page is a promise to a customer that something is wrong. Time-based
+  // detectors are re-checked over RPC at the moment they would page: if the
+  // tip moved since the last poll, the page does not go out.
+  const CONFIRM_OVER_RPC = new Set(['tip_stalled']);
+  detectors.on('alert', async (a) => {
+    if (CONFIRM_OVER_RPC.has(a.key) && cfg.rpc.pollMs > 0) {
+      try {
+        const { result } = await rpc.getBlockchainInfo();
+        if (result.blocks > (a.evidence.height ?? -1)) {
+          detectors.activeKeys.delete(a.key); // never paged, so nothing to resolve later
+          detectors.onPoll({ ok: true, ms: 0, blockchain: result });
+          bus.emit('notice', `${a.key} not paged: tip moved to ${result.blocks} on confirmation`);
+          return;
+        }
+        a.evidence.confirmedOverRpc = true;
+      } catch {
+        a.evidence.confirmedOverRpc = false; // RPC down is its own page; still send this one
+      }
+    }
+    alerts.raise(a);
+  });
   detectors.on('resolve', (r) => alerts.resolve(r));
   for (const ev of ['alert', 'update', 'resolve']) alerts.on(ev, (a) => bus.emit(ev, a));
   alerts.on('alert', () => { counters.pages++; });

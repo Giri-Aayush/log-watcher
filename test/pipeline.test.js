@@ -156,3 +156,18 @@ test('the node\'s network comes from the banner at the head of the log even when
   p.stop();
   node.server.close();
 });
+
+test('tip_stalled is re-checked over RPC at page time and not sent when the tip moved', async () => {
+  const node = await fakeNode();
+  const { p, sent, source } = build(node.url, { tipStallMin: 1 });
+  source.emit('line', committedAt(4345594, Date.now())); // a live block, per the log
+  node.state.blocks = 4345600; // …but by the time the detector looks again, RPC says the chain moved on
+  p.detectors.now = () => Date.now() + 2 * 60000; // two minutes later: the detector wants to page
+  p.detectors.tick();
+  for (let i = 0; i < 20 && p.detectors.state.tip.height !== 4345600; i++) await new Promise((r) => setTimeout(r, 25));
+  assert.deepEqual(sent, [], 'no page: the tip had moved');
+  assert.equal(p.detectors.state.tip.height, 4345600);
+  assert.equal(p.detectors.activeKeys.has('tip_stalled'), false);
+  p.stop();
+  node.server.close();
+});

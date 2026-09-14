@@ -195,6 +195,7 @@ class Store {
     if (msg.bundle && msg.bundle.node && msg.bundle.node.network) n.network = msg.bundle.node.network;
     if (msg.phase === 'NEW') this.matchKnownIssues(inc, msg.bundle);
     this.correlate(inc.key, n.network);
+    if (msg.phase === 'NEW') this.assessScope(inc, n);
     this.save();
     this.emit('incident', inc);
     return inc;
@@ -226,6 +227,21 @@ class Store {
       this.emit('incident', inc);
     }
     if (changed) this.save();
+  }
+
+  // What can we say about where the problem is? If the other nodes we watch
+  // on the same network are fine for this detector, it is this node (high
+  // confidence). If they show it too, correlate() has already made it a
+  // network incident. If this is the only node we watch on that network, we
+  // cannot tell, and the incident says so rather than implying it can.
+  assessScope(inc, n) {
+    if (inc.suppressedBy) { inc.scope = 'network'; inc.confidence = 'high'; return; }
+    const others = [...this.nodes.values()].filter((o) => o.label !== n.label && o.network && o.network === n.network && !o.quiet);
+    if (!others.length) { inc.scope = 'unknown'; inc.confidence = 'medium'; inc.scopeNote = `only node watched on ${n.network || 'this network'}; cannot compare`; return; }
+    const alsoAffected = others.filter((o) => [...this.incidents.values()].some((i) => i.label === o.label && i.key === inc.key && !i.resolvedAt && !i.transient));
+    if (alsoAffected.length) { inc.scope = 'unknown'; inc.confidence = 'low'; inc.scopeNote = `${alsoAffected.length} of ${others.length} other ${n.network} nodes show ${inc.key} too (below the network threshold)`; return; }
+    inc.scope = 'node'; inc.confidence = inc.evidence && inc.evidence.confirmedOverRpc === false ? 'medium' : 'high';
+    inc.scopeNote = `${others.length} other ${n.network} node${others.length === 1 ? '' : 's'} fine for ${inc.key}${inc.evidence && inc.evidence.confirmedOverRpc ? '; confirmed over RPC at page time' : ''}`;
   }
 
   // ---- fleet correlation -------------------------------------------------
@@ -323,6 +339,7 @@ class Store {
       },
       network, otherNodesOnNetwork: fleet, recentHistory: history, lastHour: series,
       knownIssues: (inc.knownIssues || []).map((id) => this.knownIssues.get(id)).filter(Boolean).map((ki) => ({ title: ki.title, cause: ki.cause, fix: ki.fix, workaround: ki.workaround, status: ki.status, seen: ki.occurrences.length })),
+      scope: { scope: inc.scope || 'unknown', confidence: inc.confidence || null, note: inc.scopeNote || null },
     };
   }
 
@@ -400,7 +417,12 @@ class Store {
         if (!inc.respondedAt) { inc.respondedAt = now; inc.respondedBy = by; }
         break;
       case 'close':
-        if (!inc.resolvedAt) { inc.resolvedAt = now; inc.closedBy = by; inc.resolvedDetail = text || 'closed by hand'; }
+        if (!inc.resolvedAt) {
+          inc.resolvedAt = now; inc.closedBy = by; inc.resolvedDetail = text || 'closed by hand';
+          // "false positive: …", "expected: …", "duplicate: …", "fixed: …" — the word at the front is the verdict
+          const m = /^(false[ -]?positive|expected|duplicate|fixed|noise)\b/i.exec(text || '');
+          inc.closeReason = m ? m[1].toLowerCase().replace(/[ -]/, '_') : 'other';
+        }
         break;
       case 'note':
         break;
@@ -524,6 +546,15 @@ class Store {
       totals: { incidents: incidents.length, events: events.length, open: open.length, unacked: unacked.length, suppressed: suppressed.length, nodes: this.nodes.size, quietNodes: [...this.nodes.values()].filter((n) => n.quiet).length },
       // how many closed incidents left Zero better than they found it
       improvements: { closed: closed.length, withImprovement: withImprovement.length, rate: closed.length ? withImprovement.length / closed.length : null },
+      // detector quality: what share of each detector's closed incidents were a real problem
+      quality: Object.values(closed.reduce((m, i) => {
+        const q = (m[i.key] ||= { key: i.key, closed: 0, falsePositive: 0, expected: 0, duplicate: 0 });
+        q.closed++;
+        if (i.closeReason === 'false_positive' || i.closeReason === 'noise') q.falsePositive++;
+        else if (i.closeReason === 'expected') q.expected++;
+        else if (i.closeReason === 'duplicate') q.duplicate++;
+        return m;
+      }, {})).map((q) => ({ ...q, precision: q.closed ? 1 - (q.falsePositive + q.expected + q.duplicate) / q.closed : null })).sort((a, b) => (a.precision ?? 2) - (b.precision ?? 2)),
       // the knowledge base doing its job: incidents that arrived with a known answer
       knownIssues: { entries: this.knownIssues.size, matchedIncidents: incidents.filter((i) => i.knownIssues && i.knownIssues.length).length, matchRate: incidents.length ? incidents.filter((i) => i.knownIssues && i.knownIssues.length).length / incidents.length : null },
       bySeverity: count(incidents, 'severity'), byKey: count(incidents, 'key'), byNode: count(incidents, 'label'),
@@ -566,9 +597,23 @@ function createCollector({ dir, quietMs = 60000, now = Date.now, publicDir = pat
     if (triageInFlight.has(inc.id)) return res.status(409).json({ error: 'analysis already running' });
     triageInFlight.add(inc.id);
     try {
-      const draft = await runTriage(store.triageContext(inc));
+      const ctx = store.triageContext(inc);
+      const draft = await runTriage(ctx);
       if (!draft) return res.status(502).json({ error: 'the model declined to analyse this incident' });
-      inc.triage = { ...draft, by: (req.body && req.body.by) || 'unknown' };
+      inc.triage = {
+        ...draft,
+        by: (req.body && req.body.by) || 'unknown',
+        // what the model was shown, so the reader can weigh the draft
+        saw: {
+          otherNodes: ctx.otherNodesOnNetwork.map((o) => o.label),
+          logLines: ctx.bundle ? ctx.bundle.logs.length : 0,
+          knownIssues: ctx.knownIssues.length,
+          historyItems: ctx.recentHistory.length,
+          heartbeatSamples: ctx.lastHour ? ctx.lastHour.samples : 0,
+          bundleAt: ctx.bundle && ctx.incident.pagedAt,
+          scope: inc.scope || null, confidence: inc.confidence || null,
+        },
+      };
       store.act(inc.id, 'triage', { by: inc.triage.by });
       res.json(inc);
     } catch (err) {

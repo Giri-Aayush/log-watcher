@@ -269,6 +269,17 @@
       : esc(word);
     setHTML('status', $('h-status'), html);
     $('h-status').className = 'status ' + cls;
+    // scope + confidence, as assessed by the collector when the page arrived
+    const wrap = $('h-scope-wrap');
+    if (wrap) {
+      wrap.hidden = !inc.scope;
+      if (inc.scope) {
+        const word = inc.scope === 'node' ? 'this node' : inc.scope === 'network' ? 'network-wide' : 'undetermined';
+        setText('h-scope', word + ' · ' + (inc.confidence || '?') + ' confidence');
+        $('h-scope').title = inc.scopeNote || '';
+        $('h-scope').style.color = inc.confidence === 'high' ? '' : inc.confidence === 'low' ? 'var(--warn)' : 'var(--fg-2)';
+      }
+    }
   }
 
   // The five stages on one clock. onsetAt / pagedAt / resolvedAt are sidecar
@@ -547,9 +558,16 @@
     if (!show) return;
     const model = triage.model ? triage.model : 'the model';
     const when = triage.at ? 'at ' + stamp(triage.at) : 'at page time';
-    setText('triage-note', triage.source === 'collector'
+    // what the model was shown, so the reader can weigh the draft
+    const saw = triage.saw;
+    const sawText = saw ? ' It saw: ' + [
+      saw.otherNodes && saw.otherNodes.length ? saw.otherNodes.length + ' other node' + (saw.otherNodes.length === 1 ? '' : 's') + ' on the network (' + saw.otherNodes.join(', ') + ')' : 'no other node on this network',
+      saw.logLines + ' log lines', saw.heartbeatSamples + ' heartbeats from the last hour', saw.historyItems + ' earlier incidents', saw.knownIssues + ' known-issue matches',
+      saw.scope ? 'scope ' + saw.scope + ' (' + saw.confidence + ')' : null,
+    ].filter(Boolean).join(', ') + '.' : '';
+    setText('triage-note', (triage.source === 'collector'
       ? 'Analysis — requested by ' + (triage.by || '?') + ' ' + when + ', written by ' + model + ' on the collector. Nothing here is sent until a human approves it.'
-      : 'Triage draft — written by ' + model + ' ' + when + ' on the sidecar. Nothing here is sent until a human approves it.');
+      : 'Triage draft — written by ' + model + ' ' + when + ' on the sidecar. Nothing here is sent until a human approves it.') + sawText);
     const parsed = parseTriage(triage.text);
     if (parsed) {
       $('triage-grid').hidden = false; $('triage-raw').hidden = true;

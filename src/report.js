@@ -30,6 +30,7 @@ function incidentReport(inc, { bundle = null, members = [], now = Date.now() } =
   lines.push(`**Detector:** \`${inc.key}\` (${inc.severity})  `);
   lines.push(`**Status:** ${status}  `);
   lines.push(`**Incident id:** \`${inc.id}\`  `);
+  if (inc.scope) lines.push(`**Scope:** ${inc.scope === 'node' ? 'this node' : inc.scope === 'network' ? 'network-wide' : 'undetermined'} (${inc.confidence} confidence${inc.scopeNote ? `: ${inc.scopeNote}` : ''})  `);
   lines.push(`**Prepared:** ${ts(now)} by Zero (Shielded Labs)`);
   lines.push('');
 
