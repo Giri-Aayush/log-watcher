@@ -296,6 +296,9 @@ class Detectors extends EventEmitter {
       if (g.ok !== false) g.firstFailureAt = now;
       g.ok = false;
       g.error = sample.error.message;
+      // A refused connection while RPC is already down is the same incident
+      // as rpc_down; only page here for a node that answers RPC but not this.
+      if (sample.error.kind === 'network' && this.state.rpc.ok === false) return;
       this.raise('gbt_error', 'critical', 'getblocktemplate is failing',
         `${sample.error.message}. A pool pointed at this node cannot get work.`,
         { error: sample.error.message, kind: sample.error.kind, ms: sample.ms },

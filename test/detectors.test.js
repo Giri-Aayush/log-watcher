@@ -171,3 +171,13 @@ test('getblocktemplate: errors, latency and a template that is not ahead of the 
   h.d.onGbt({ ok: true, ms: 30, result: { height: 101, transactions: [] } });
   assert.equal(h.resolved.at(-1).key, 'gbt_stale');
 });
+
+test('getblocktemplate refused while RPC is down does not page a second time', () => {
+  const h = harness({ rpcFailCount: 1 });
+  h.d.onPoll({ ok: false, ms: 2, error: { message: 'ECONNREFUSED', kind: 'network' } });
+  h.d.onGbt({ ok: false, ms: 2, error: { message: 'ECONNREFUSED', kind: 'network' } });
+  assert.deepEqual(h.keys(), ['rpc_down']);
+  h.ok();
+  h.d.onGbt({ ok: false, ms: 5, error: { message: 'Zebra is not synced', kind: 'rpc' } }); // RPC is fine, templates are not
+  assert.deepEqual(h.keys(), ['rpc_down', 'gbt_error']);
+});
