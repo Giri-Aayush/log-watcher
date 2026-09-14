@@ -109,7 +109,9 @@ case "${1:-}" in
       nohup node server.js > "$DIR/testnet.out" 2>&1 & echo $! > "$DIR/testnet.pid"; }
     sleep 2; say "testnet sidecar  http://localhost:3001/"; command -v open >/dev/null && open "http://localhost:3001/" || true ;;
   status)
-    for p in zebrad collector sidecar twin testnet; do alive "$p" && echo "$p: up (pid $(cat "$DIR/$p.pid"))" || echo "$p: down"; done
+    # the node may have been started by hand (demo-live.sh node): judge it by RPC, not by our pid file
+    if [ -f "$DIR/.cookie" ] && curl -s -m 3 -u "$(cat "$DIR/.cookie")" -H 'content-type: application/json' --data-binary '{"jsonrpc":"2.0","id":1,"method":"getblockcount","params":[]}' "http://127.0.0.1:$RPC_PORT/" | grep -q result; then echo "zebrad: up (rpc :$RPC_PORT$(alive zebrad && echo ", pid $(cat "$DIR/zebrad.pid")" || echo ", started by hand"))"; else echo "zebrad: down"; fi
+    for p in collector sidecar twin testnet; do alive "$p" && echo "$p: up (pid $(cat "$DIR/$p.pid"))" || echo "$p: down"; done
     curl -s "http://localhost:$SIDECAR_PORT/health" | head -c 400; echo ;;
   logs)     tail -n 40 -f "$DIR/sidecar.out" ;;
   down)
