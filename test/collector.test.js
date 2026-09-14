@@ -86,6 +86,7 @@ test('heartbeats build a per-node series, a fleet row, and availability; silence
   assert.equal(node.open, 1);
   assert.ok(node.availability < 1 && node.availability > 0);
   assert.equal(a.availability, node.availability); // one node: fleet == node
+  assert.equal(a.quietMs, 60000); // the quiet threshold the node page lists with the sidecar's own
 
   h.advance(2 * MIN);
   h.store.sweepQuiet();
