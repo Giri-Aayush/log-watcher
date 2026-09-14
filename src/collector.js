@@ -554,7 +554,9 @@ function createCollector({ dir, quietMs = 60000, now = Date.now, publicDir = pat
     try { bundle = JSON.parse(fs.readFileSync(path.join(store.dir, inc.latestBundleFile || inc.bundleFile), 'utf8')); } catch { /* no bundle */ }
     const knownIssueDetails = (inc.knownIssues || []).map((id) => store.knownIssues.get(id)).filter(Boolean)
       .map((ki) => ({ id: ki.id, title: ki.title, status: ki.status, cause: ki.cause, fix: ki.fix, workaround: ki.workaround, seen: ki.occurrences.length, nodes: new Set(ki.occurrences.map((o) => o.label)).size, fixedIn: ki.fixedIn || null }));
-    res.json({ ...inc, bundle, knownIssueDetails });
+    // `at` is the collector clock now, so the page can tick an open stage's
+    // duration against the same clock ackedAt/receivedAt are on
+    res.json({ ...inc, bundle, knownIssueDetails, at: store.now() });
   });
   app.get('/api/incidents/:id/report', (req, res) => {
     const inc = store.incidents.get(req.params.id);
@@ -563,6 +565,18 @@ function createCollector({ dir, quietMs = 60000, now = Date.now, publicDir = pat
     try { bundle = JSON.parse(fs.readFileSync(path.join(store.dir, inc.bundleFile), 'utf8')); } catch { /* network incidents have none */ }
     const members = (inc.members || []).map((id) => store.incidents.get(id)).filter(Boolean);
     res.type('text/markdown').send(incidentReport(inc, { bundle, members, now: store.now() }));
+  });
+  // promote and match must be registered before the generic :action route,
+  // or Express hands them to act(), which does not know them
+  app.post('/api/incidents/:id/promote', (req, res) => {
+    const inc = store.incidents.get(req.params.id);
+    if (!inc) return res.status(404).json({ error: 'not found' });
+    res.json(store.promoteToKnownIssue(inc, { by: (req.body && req.body.by) || 'unknown' }));
+  });
+  app.post('/api/incidents/:id/match', (req, res) => {
+    const inc = store.incidents.get(req.params.id);
+    if (!inc) return res.status(404).json({ error: 'not found' });
+    res.json(store.matchKnownIssues(inc));
   });
   app.post('/api/incidents/:id/:action', (req, res) => {
     try {
@@ -590,16 +604,6 @@ function createCollector({ dir, quietMs = 60000, now = Date.now, publicDir = pat
     const ki = store.updateKnownIssue(req.params.id, req.body || {}, { by: (req.body && req.body.by) || 'unknown' });
     if (!ki) return res.status(404).json({ error: 'not found' });
     res.json(ki);
-  });
-  app.post('/api/incidents/:id/promote', (req, res) => {
-    const inc = store.incidents.get(req.params.id);
-    if (!inc) return res.status(404).json({ error: 'not found' });
-    res.json(store.promoteToKnownIssue(inc, { by: (req.body && req.body.by) || 'unknown' }));
-  });
-  app.post('/api/incidents/:id/match', (req, res) => {
-    const inc = store.incidents.get(req.params.id);
-    if (!inc) return res.status(404).json({ error: 'not found' });
-    res.json(store.matchKnownIssues(inc));
   });
   app.get('/api/versions', (req, res) => res.json(store.versions()));
   app.get('/bundles/*', (req, res) => res.sendFile(path.join(store.dir, 'bundles', req.params[0])));

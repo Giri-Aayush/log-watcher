@@ -192,6 +192,42 @@ test('report endpoint data: marking a report sent lands in the record', () => {
   assert.equal(inc.notes[0].action, 'report');
 });
 
+test('GET /api/incidents/:id carries the collector clock and the latest bundle; an unknown id is a 404', async () => {
+  const { createCollector } = require('../src/collector');
+  let t = T0;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lw-collector-http-'));
+  const c = createCollector({ dir, now: () => t });
+  const server = await new Promise((resolve) => { const s = c.app.listen(0, () => resolve(s)); });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    c.store.ingest({ phase: 'NEW', label: 'pool-1', alert: stall(), bundle: { label: 'pool-1', logs: ['l1'] } });
+    t += 5 * MIN;
+    const r = await fetch(`${base}/api/incidents/inc-1`);
+    assert.equal(r.status, 200);
+    const body = await r.json();
+    assert.equal(body.at, T0 + 5 * MIN, 'at is the collector clock at response time');
+    assert.equal(body.receivedAt, T0);
+    assert.deepEqual(body.bundle.logs, ['l1']);
+    assert.deepEqual(body.knownIssueDetails, []);
+    const missing = await fetch(`${base}/api/incidents/nope`);
+    assert.equal(missing.status, 404);
+
+    // POST /promote must reach its own handler, not the generic :action route
+    const promoted = await fetch(`${base}/api/incidents/inc-1/promote`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ by: 'aayush' }) });
+    assert.equal(promoted.status, 200);
+    const issue = await promoted.json();
+    assert.equal(issue.status, 'draft');
+    const after = await (await fetch(`${base}/api/incidents/inc-1`)).json();
+    assert.equal(after.knownIssueDetails.length, 1);
+    assert.equal(after.knownIssueDetails[0].id, issue.id);
+    assert.equal(after.notes.at(-1).action, 'promote');
+    assert.equal(after.notes.at(-1).text, issue.id);
+  } finally {
+    c.stop();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('triage context carries the fleet, the history and the last hour, not the whole record', () => {
   const h = harness();
   const beat = (label, seq, extra = {}) => h.store.ingest({ phase: 'HEARTBEAT', label, seq, sentAt: h.now(), sidecar: { startedAt: 1 }, at: h.now(), node: { build: 'v6.3.0', network: 'Mainnet' }, tip: { height: 100, at: h.now() - 30000 }, peers: 8, rpc: { ok: true, ms: 12 }, mempool: { size: 3 }, activeAlerts: [], ...extra });

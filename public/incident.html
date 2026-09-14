@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Zero · Incident</title>
+<link rel="stylesheet" href="zero-tokens.css">
+<style>
+/* Incident detail screen. Layout and sizes follow design/Zero Incident.dc.html;
+   every color is a token from zero-tokens.css. The top bar, pills, tags and
+   buttons are the same rules as fleet.html, copied rather than shared so the
+   two pages do not depend on each other. */
+
+[hidden] { display: none !important; }
+button { font: inherit; cursor: pointer; }
+button:disabled { cursor: default; }
+input { font: inherit; }
+
+.page { min-width: var(--page-min); max-width: var(--page-max); margin: 0 auto; min-height: 100vh; background: var(--bg); color: var(--fg); }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* top bar (as fleet.html) */
+.topbar { height: var(--bar-h); display: flex; align-items: center; gap: var(--sp-4); padding: 0 var(--gutter); border-bottom: 1px solid var(--border); background: var(--bg-elevated); white-space: nowrap; overflow: hidden; }
+.brand { display: flex; align-items: baseline; gap: var(--sp-2); }
+.brand .name { font-weight: var(--fw-medium); font-size: 14px; }
+.brand .org { font-size: var(--fs-micro); color: var(--fg-3); }
+.nav { display: flex; gap: var(--sp-1); }
+.nav > * { padding: 4px 10px; border-radius: var(--r-control); color: var(--fg-2); text-decoration: none; }
+.nav > a:hover { text-decoration: none; }
+.nav > .active { color: var(--fg); background: var(--surface-hover); }
+.nav > .soon { color: var(--fg-3); cursor: default; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: var(--sp-3); }
+.kbd { display: inline-flex; align-items: center; padding: 2px 7px; border: 1px solid var(--border); border-radius: var(--r-control); background: var(--bg); color: var(--fg-3); font-size: var(--fs-micro); }
+.oncall { font-size: var(--fs-label); color: var(--fg-2); }
+.oncall b { font-weight: var(--fw-regular); color: var(--fg); cursor: pointer; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: var(--r-control); font-size: var(--fs-label); }
+.pill.crit { background: var(--crit-soft); color: var(--crit); }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.clock { font-family: var(--font-mono); font-size: var(--fs-label); color: var(--fg-2); }
+
+/* page body */
+.main { padding: var(--sp-4) var(--gutter) var(--sp-8); display: flex; flex-direction: column; gap: var(--sp-4); }
+.card { border: 1px solid var(--border); border-radius: var(--r-card); background: var(--surface); }
+.card-head { padding: 8px 16px; border-bottom: 1px solid var(--border); font-size: var(--fs-label); color: var(--fg-2); display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3); }
+.card-head .mono { color: var(--fg-3); white-space: nowrap; }
+.muted { color: var(--fg-3); }
+.empty { padding: 10px 16px; font-size: var(--fs-label); color: var(--fg-3); }
+
+/* breadcrumb + heading */
+.crumbs { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-label); color: var(--fg-3); }
+.crumbs a { color: var(--fg-2); }
+.crumbs .here { color: var(--fg-2); }
+.head { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.tag { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: var(--r-chip); font-size: var(--fs-label); }
+.tag.critical { background: var(--crit-soft); color: var(--crit); }
+.tag.warning { background: var(--warn-soft); color: var(--warn); }
+.tag.info { background: var(--info-soft); color: var(--info); }
+.head .key { font-family: var(--font-mono); font-size: var(--fs-body); color: var(--fg-2); }
+.head .title { font-size: 18px; font-weight: var(--fw-medium); line-height: 1.2; }
+.head .on { color: var(--fg-3); }
+.head .node { font-weight: var(--fw-medium); color: var(--fg); }
+.head .node.network { font-family: var(--font-mono); font-weight: var(--fw-regular); }
+.head .meta { margin-left: auto; display: flex; gap: var(--sp-4); font-size: var(--fs-label); color: var(--fg-2); font-family: var(--font-mono); white-space: nowrap; }
+.head .meta b { font-weight: var(--fw-regular); color: var(--fg); }
+.status.unacked { color: var(--crit); }
+.status.acked, .status.responded, .status.suppressed { color: var(--fg-2); }
+.status.resolved { color: var(--ok); }
+
+/* lifecycle strip */
+.life { padding: 16px 20px 12px; display: flex; flex-direction: column; gap: var(--sp-2); }
+.life-head { display: flex; justify-content: space-between; gap: var(--sp-4); font-size: var(--fs-label); color: var(--fg-2); }
+.life-head > span:first-child { white-space: nowrap; }
+.life-head .num { text-align: right; }
+.strip { display: flex; align-items: flex-start; padding-top: var(--sp-2); }
+.stage { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 90px; flex: none; position: relative; }
+.stage .pt { width: 12px; height: 12px; border-radius: 50%; box-sizing: border-box; background: transparent; border: 2px solid var(--fg-3); }
+.stage.done .pt { background: var(--fg); border-color: var(--fg); }
+.stage.crit .pt { background: var(--crit); border-color: var(--crit); }
+.stage.ok .pt { background: var(--ok); border-color: var(--ok); }
+.stage .nm { font-size: var(--fs-label); }
+.stage .at { font-family: var(--font-mono); font-size: var(--fs-label); color: var(--fg-2); }
+.stage .day { font-family: var(--font-mono); font-size: var(--fs-micro); color: var(--fg-3); margin-top: -4px; }
+.stage .cap { font-size: var(--fs-micro); color: var(--fg-3); text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.segm { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 5px -45px 0; min-width: 0; }
+.segm .ln { height: 2px; width: 100%; background: var(--border-strong); }
+.segm.lit .ln { background: var(--fg); }
+.segm.crit .ln { background: var(--crit); }
+.segm .d { font-family: var(--font-mono); font-size: var(--fs-micro); color: var(--fg-2); white-space: nowrap; }
+
+/* two columns */
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: var(--sp-4); align-items: start; }
+.col { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+
+/* actions */
+.acts { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+.acts-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.btn { border: 1px solid var(--border-strong); background: var(--bg-elevated); color: var(--fg); border-radius: var(--r-control); padding: 4px 10px; font-size: var(--fs-body); transition: background var(--dur-micro) var(--ease); }
+.btn:hover:not(:disabled) { background: var(--surface-hover); }
+.btn:disabled { color: var(--fg-3); }
+.btn.primary { background: var(--surface-hover); padding: 4px 12px; }
+.btn.plain { border: 0; background: transparent; color: var(--fg-2); padding: 4px 8px; }
+.btn.small { padding: 3px 10px; font-size: var(--fs-label); }
+.acts-row .close { margin-left: auto; }
+.acts-row a { font-size: var(--fs-label); padding: 4px 6px; }
+.acts-row.report { font-size: var(--fs-label); gap: var(--sp-3); }
+.acts-row.report a { padding: 0; }
+.acts-row.report .muted:empty { display: none; }
+.acts-row.report .muted.err { color: var(--crit); }
+.note-row { display: flex; gap: var(--sp-2); }
+.note-row input { flex: 1; background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: var(--r-control); color: var(--fg); padding: 5px 10px; }
+.note-row input::placeholder { color: var(--fg-3); }
+
+/* rpc latency */
+.rpc { padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; }
+.rpc-head { display: flex; justify-content: space-between; font-size: var(--fs-label); color: var(--fg-2); }
+.rpc svg { width: 100%; height: 80px; display: block; }
+.rpc .axis { stroke: var(--border-strong); }
+.rpc .grid { stroke: var(--border); opacity: .75; }
+.rpc .line { fill: none; stroke: var(--fg-2); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.rpc .fail { stroke: var(--crit); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.rpc .paged { stroke: var(--crit); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.axis-labels { display: flex; justify-content: space-between; font-size: var(--fs-micro); color: var(--fg-3); font-family: var(--font-mono); }
+.axis-labels .paged { color: var(--crit); }
+.rpc .empty { padding: 0; height: 80px; display: flex; align-items: center; }
+
+/* log excerpt */
+.log { overflow: hidden; }
+.log-body { font-family: var(--font-mono); font-size: 11.5px; line-height: 1.7; padding: 8px 16px; display: grid; grid-template-columns: auto auto auto minmax(0, 1fr); column-gap: 14px; white-space: nowrap; overflow: hidden; }
+.log-body .t, .log-body .lag { color: var(--fg-3); }
+.log-body .lv.ok { color: var(--ok); }
+.log-body .lv.warn { color: var(--warn); }
+.log-body .lv.crit { color: var(--crit); }
+.log-body .lv.fg-2 { color: var(--fg-2); }
+.log-body .msg { overflow: hidden; text-overflow: ellipsis; }
+.log-body .msg.cont { color: var(--fg-2); }
+.log-foot { padding: 6px 16px; border-top: 1px solid var(--border); font-size: var(--fs-micro); color: var(--fg-3); }
+.log-foot a { font-size: var(--fs-micro); }
+
+/* triage draft */
+.triage { border: 1px dashed color-mix(in srgb, var(--info) 45%, transparent); padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+.triage-head { display: flex; align-items: center; gap: 10px; font-size: var(--fs-label); color: var(--fg-2); }
+.chip { display: inline-flex; padding: 1px 6px; border-radius: var(--r-chip); background: var(--info-soft); color: var(--info); font-size: var(--fs-micro); }
+.triage-grid { display: grid; grid-template-columns: 130px minmax(0, 1fr); row-gap: 8px; column-gap: 16px; font-size: 12.5px; }
+.triage-grid .k { color: var(--fg-2); }
+.triage-grid .v { white-space: pre-wrap; overflow-wrap: anywhere; }
+.triage-grid .v.mono { font-family: var(--font-mono); font-size: 11.5px; color: var(--fg-2); }
+.triage-grid .v.quote { border-left: 1px solid var(--border-strong); padding-left: 10px; color: var(--fg-2); }
+.triage-raw { font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.triage-acts { display: flex; gap: 6px; }
+
+/* notes & audit trail */
+.trail { overflow: hidden; }
+.trail-row { display: grid; grid-template-columns: 70px 90px minmax(0, 1fr); gap: 14px; padding: 7px 16px; border-bottom: 1px solid var(--border); font-size: 12.5px; align-items: baseline; }
+.trail-row:last-child { border-bottom: 0; }
+.trail-row .t { font-family: var(--font-mono); font-size: var(--fs-label); color: var(--fg-3); white-space: nowrap; }
+.trail-row .who { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trail-row .who.sys { color: var(--fg-2); }
+.trail-row .verb { color: var(--fg-2); }
+.trail-row .what { overflow-wrap: anywhere; }
+
+/* right column: seen before, evidence, snapshot, members */
+.tag.draft { background: var(--info-soft); color: var(--info); }
+.tag.confirmed { background: var(--ok-soft); color: var(--ok); }
+.tag.retired { background: var(--neutral-soft); color: var(--fg-2); }
+.card-head a.small { font-size: var(--fs-micro); white-space: nowrap; }
+.kb-item { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.kb-item:last-child { border-bottom: 0; }
+.kb-head { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.kb-head .title { font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.kb-head .seen { font-family: var(--font-mono); font-size: var(--fs-micro); color: var(--fg-3); white-space: nowrap; }
+.kb-rows { display: grid; grid-template-columns: 76px minmax(0, 1fr); column-gap: 12px; row-gap: 4px; font-size: 12.5px; }
+.kb-rows .k { color: var(--fg-2); }
+.kb-rows .v { overflow-wrap: anywhere; }
+.kb-rows .v.nil { color: var(--fg-3); }
+.kb-item .more { font-size: var(--fs-label); }
+.kb-none { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: 10px 16px; font-size: var(--fs-label); color: var(--fg-3); }
+.kb-none .btn { flex: none; white-space: nowrap; }
+
+.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 16px; row-gap: 5px; padding: 10px 16px; font-family: var(--font-mono); font-size: var(--fs-label); }
+.kv .k { color: var(--fg-2); }
+.kv .v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kv .v.nil { color: var(--fg-3); }
+.kv .v.obj { color: var(--fg-2); }
+.kv .v.critical { color: var(--crit); }
+.kv .v.warning { color: var(--warn); }
+.kv .v.info { color: var(--info); }
+.next { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; }
+.next .k { font-size: var(--fs-micro); color: var(--fg-2); letter-spacing: var(--tracking-label); white-space: nowrap; }
+.next .v { font-size: 12.5px; }
+.members { display: flex; flex-direction: column; }
+.member { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-3); padding: 6px 16px; border-bottom: 1px solid var(--border); font-size: var(--fs-label); align-items: baseline; }
+.member:last-child { border-bottom: 0; }
+.member .lbl { font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member .lbl .id { font-family: var(--font-mono); font-weight: var(--fw-regular); color: var(--fg-2); margin-left: 6px; }
+.member .st { font-family: var(--font-mono); font-size: var(--fs-micro); color: var(--fg-3); white-space: nowrap; }
+.member .st.unacked { color: var(--crit); }
+.member .st.resolved { color: var(--ok); }
+.raw { font-size: var(--fs-label); font-family: var(--font-mono); overflow-wrap: anywhere; }
+.raw + .raw { margin-top: calc(-1 * var(--sp-2)); }
+
+/* missing incident */
+.problem { padding: var(--sp-8) 0; display: flex; flex-direction: column; gap: var(--sp-2); align-items: flex-start; }
+.problem .big { font-size: var(--fs-title); font-weight: var(--fw-medium); }
+.problem .why { color: var(--fg-2); }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="topbar">
+    <div class="brand"><span class="name">Zero</span><span class="org">Shielded Labs</span></div>
+    <nav class="nav" aria-label="sections">
+      <a href="/">Overview</a>
+      <span class="active" aria-current="page">Incident</span>
+      <span class="soon" title="coming">Node</span>
+      <span class="soon" title="coming">Sidecar</span>
+      <span class="soon" title="coming">Components</span>
+    </nav>
+    <div class="topbar-right">
+      <span class="kbd">⌘K</span>
+      <span class="oncall">on call <b id="oncall" title="click to set your name">—</b></span>
+      <span class="pill crit" id="crit-pill" hidden><span class="dot"></span><span><span class="num" id="crit-n">0</span> critical open</span></span>
+      <span class="clock" id="clock">--:--:-- UTC</span>
+    </div>
+  </header>
+
+  <main class="main" id="main" hidden>
+    <div class="crumbs"><a href="/">Fleet</a><span>/</span><span class="here" id="crumb-node"></span><span>/</span><span class="num" id="crumb-id"></span></div>
+
+    <div class="head">
+      <span class="tag" id="h-sev"></span>
+      <span class="key" id="h-key"></span>
+      <span class="title" id="h-title"></span>
+      <span class="on">on</span><span class="node" id="h-node"></span>
+      <span class="meta"><span>escalations <b id="h-esc">0</b></span><span>status <span class="status" id="h-status"></span></span></span>
+    </div>
+
+    <div class="card life">
+      <div class="life-head"><span title="all times UTC">lifecycle · UTC</span><span class="num" id="life-metrics"></span></div>
+      <div class="strip" id="strip"></div>
+    </div>
+
+    <div class="cols">
+      <div class="col">
+        <div class="card acts">
+          <div class="acts-row">
+            <button type="button" class="btn" id="b-ack">Acknowledge</button>
+            <button type="button" class="btn" id="b-respond">Mark responded</button>
+            <button type="button" class="btn" id="b-note">Add note</button>
+            <button type="button" class="btn" id="b-improve">Record improvement</button>
+            <button type="button" class="btn close" id="b-close">Close</button>
+          </div>
+          <div class="acts-row report">
+            <button type="button" class="btn small" id="b-triage" hidden>Ask Claude for an analysis</button>
+            <span class="muted" id="triage-status"></span>
+            <a id="a-report" target="_blank" rel="noopener">Incident report ↗</a>
+            <button type="button" class="btn small" id="b-report">Report sent</button>
+            <a id="a-raw" target="_blank" rel="noopener">raw JSON bundle ↗</a>
+          </div>
+          <form class="note-row" id="note-row" hidden>
+            <input id="note-text" autocomplete="off" placeholder="Add a note to the audit trail">
+            <button type="submit" class="btn primary" id="note-submit">Save note</button>
+            <button type="button" class="btn plain" id="note-cancel">Cancel</button>
+          </form>
+        </div>
+
+        <div class="card empty" id="no-bundle" hidden>network incident — the collector opened it from the member incidents, so there is no node bundle here; the snapshot, log excerpt, RPC latency and triage draft are on each member's page.</div>
+
+        <div class="card rpc" id="rpc-card">
+          <div class="rpc-head"><span>RPC latency · last hour</span><span class="num" id="rpc-stats"></span></div>
+          <svg viewBox="0 0 600 80" preserveAspectRatio="none" aria-hidden="true" id="rpc-svg">
+            <line class="axis" x1="0" y1="79.5" x2="600" y2="79.5"></line>
+            <line class="grid" x1="0" y1="40" x2="600" y2="40"></line>
+            <g id="rpc-plot"></g>
+          </svg>
+          <div class="empty" id="rpc-empty" hidden></div>
+          <div class="axis-labels" id="rpc-axis"></div>
+        </div>
+
+        <div class="card log" id="log-card">
+          <div class="card-head"><span id="log-title">log excerpt</span><span class="num mono">node ts · received ts</span></div>
+          <div class="log-body" id="log-body"></div>
+          <div class="empty" id="log-empty" hidden></div>
+          <div class="log-foot" id="log-foot" hidden></div>
+        </div>
+
+        <div class="card triage" id="triage" hidden>
+          <div class="triage-head"><span class="chip">draft</span><span id="triage-note"></span></div>
+          <div class="triage-grid" id="triage-grid"></div>
+          <div class="triage-raw" id="triage-raw" hidden></div>
+          <div class="triage-acts">
+            <button type="button" class="btn small" id="b-use-draft">Use as response note</button>
+            <button type="button" class="btn plain small" id="b-discard">Discard</button>
+          </div>
+        </div>
+
+        <div class="card trail" id="changes-card" hidden>
+          <div class="card-head"><span>what changed in Zero because of this</span></div>
+          <div id="changes"></div>
+        </div>
+
+        <div class="card trail">
+          <div class="card-head"><span>notes &amp; audit trail</span></div>
+          <div id="trail"></div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card" id="kb-card" hidden>
+          <div class="card-head"><span>seen before</span><a class="small" id="a-promote-new" href="#promote" hidden>Promote as new</a></div>
+          <div id="kb-list"></div>
+          <div class="kb-none" id="kb-none" hidden><span>no known issue matches this signature</span><button type="button" class="btn small" id="b-promote">Promote to known issue</button></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><span>evidence · from detector</span></div>
+          <div class="kv" id="evidence"></div>
+          <div class="next" id="next" hidden><span class="k">next:</span><span class="v" id="next-text"></span></div>
+        </div>
+
+        <div class="card" id="members-card" hidden>
+          <div class="card-head"><span id="members-title">members</span></div>
+          <div class="members" id="members"></div>
+        </div>
+
+        <div class="card" id="snap-card">
+          <div class="card-head"><span id="snap-title">node snapshot · at page time</span></div>
+          <div class="kv" id="snapshot"></div>
+          <div class="empty" id="snap-empty" hidden></div>
+        </div>
+
+        <a class="raw" id="raw-page" target="_blank" rel="noopener" hidden></a>
+        <a class="raw" id="raw-resolved" target="_blank" rel="noopener" hidden></a>
+      </div>
+    </div>
+  </main>
+
+  <main class="main" id="problem" hidden>
+    <div class="problem">
+      <span class="big" id="problem-title"></span>
+      <span class="why" id="problem-why"></span>
+      <a href="/">← back to Fleet</a>
+    </div>
+  </main>
+</div>
+<script src="incident.js"></script>
+</body>
+</html>
