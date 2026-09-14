@@ -73,6 +73,15 @@ on this node just mined on a stale tip and would never know. Also: the RPC cooki
 rotated on restart and the sidecar picked it up (Zebra closes the socket on a
 stale cookie rather than answering 401 — learned that the hard way today).
 
+**5b. The collector goes down (optional, 1 min).** Kill it:
+`kill $(cat .regtest/collector.pid)`. Then `scripts/demo-live.sh kill` and
+`revive` again. The sidecar's header shows `delivered N (+4 queued)` in red;
+the console says `collector unreachable; queueing`. Bring it back
+(`COLLECTOR_PORT=4000 COLLECTOR_DIR=.regtest/collected node scripts/collector.js &`)
+and watch the queue flush in order — NEW, node_restarted, RESOLVED — with no
+duplicates on the fleet page. Say: pages are never lost because Zero's side was
+restarting; delivery is ordered, retried with backoff, and deduplicated.
+
 **6. Real network (optional, 1 min).**
 ```bash
 scripts/demo-live.sh testnet     # second sidecar on :3001, Linode testnet node over SSH

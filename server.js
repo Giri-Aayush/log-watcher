@@ -42,7 +42,17 @@ app.get(['/log', '/logs'], (req, res) => res.sendFile(path.join(__dirname, 'publ
 io.on('connection', (socket) => socket.emit('init', pipeline.snapshot()));
 pipeline.bus.on('log', (entry) => io.emit('log', entry));
 pipeline.bus.on('event', (ev) => io.emit('event', ev));
-pipeline.bus.on('state', () => io.emit('state', { state: pipeline.detectors.state, counters: pipeline.snapshot(0).counters }));
+// A busy node logs many lines a second; one state broadcast per line is
+// noise. Coalesce to at most four a second.
+let stateTimer = null;
+pipeline.bus.on('state', () => {
+  if (stateTimer) return;
+  stateTimer = setTimeout(() => {
+    stateTimer = null;
+    io.emit('state', { state: pipeline.detectors.state, counters: pipeline.snapshot(0).counters });
+  }, 250);
+});
+pipeline.bus.on('notice', (msg) => console.log(`[log-watcher] ${msg}`));
 pipeline.bus.on('alert', (a) => io.emit('alert', a));
 pipeline.bus.on('update', (a) => io.emit('alert', a));
 pipeline.bus.on('resolve', (a) => io.emit('resolve', a));

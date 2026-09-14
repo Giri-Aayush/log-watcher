@@ -81,6 +81,7 @@ class AlertManager extends EventEmitter {
     if (!alert) return null;
     this.active.delete(key);
     alert.resolved = { at: this.now(), detail };
+    alert.resolvedBundle = this.makeBundle(alert); // what the node looked like when it cleared
     this.emit('resolve', alert);
     await this.fanout({ alert, phase: 'RESOLVED', text: this.formatText(alert, 'RESOLVED') });
     return alert;

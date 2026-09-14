@@ -85,6 +85,15 @@ The page itself is one HTTP POST to a loopback Signal bridge: sub-second.
   restart that happened an hour ago is context, not an incident.
 - **Outbound only.** The sidecar reaches the node over loopback and reaches Zero
   by POSTing outward. Nothing connects in; no operator has to open a port.
+- **Delivery is ordered and retried, not fire-and-forget.** Messages to the
+  collector go through an outbox: one in flight at a time (so RESOLVED cannot
+  overtake NEW), exponential backoff while the collector is unreachable, every
+  message numbered so a retry that lands twice is dropped once. Heartbeats
+  collapse to the newest while queued; alerts are never dropped until the queue
+  hits its bound (1000). The dashboard's `delivered` counter shows the queue.
+- **No gap mixes clocks.** Time to detect and time to resolve are sidecar-clock
+  to sidecar-clock; time to acknowledge and respond are collector-clock to
+  collector-clock. Each node's skew is shown on the fleet page.
 - **Each alert carries a `next:` line** — the first three things to check, written
   for the engineer on the rotation, not for the operator.
 - **A human sends every message to an operator.** With `ANTHROPIC_API_KEY` set,
@@ -171,10 +180,15 @@ bundle: bundles/2026-09-14T11-28-33-120Z-tip_stalled-7.json
 
 ### The collector (Zero side)
 
-`scripts/collector.js` is the other end of `LW_WEBHOOK_URL`: it stores every bundle
-under `collected/<label>/`, serves a fleet table at `/`, and logs `QUIET` when a
-sidecar stops sending heartbeats. It is a reference for the shape of the design —
-one process, JSON on disk, no auth — not the production service.
+`scripts/collector.js` is the other end of `LW_WEBHOOK_URL`. It keeps an
+incident per stateful alert with the timestamps the response metrics are built
+from — onset, paged, acknowledged, responded (told the operator), resolved — and
+serves them at `/`: p50/p95 of each gap over a window, oldest unacknowledged,
+availability per node, a fleet table, and Ack / Responded / Close actions. Every
+bundle is stored under `collected/bundles/<label>/`; heartbeats become a per-node
+series (`/api/series/<label>`). A node that stops sending heartbeats is marked
+quiet after 60 s. One process, JSON on disk, no auth: the shape of the design,
+not the production service.
 
 ### Configuration
 

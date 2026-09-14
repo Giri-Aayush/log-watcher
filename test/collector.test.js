@@ -104,6 +104,30 @@ test('closing by hand and reloading from disk', () => {
   assert.equal(again.openIncidents().length, 0);
 });
 
+test('retries with the same seq are dropped; a restarted sidecar starts a new sequence; nodes survive a reload', () => {
+  const h = harness();
+  const sidecar = { startedAt: 1, host: 'a' };
+  h.store.ingest({ phase: 'HEARTBEAT', label: 'pool-1', seq: 1, sentAt: h.now() - 40, sidecar, at: h.now(), tip: { height: 1, at: h.now() }, rpc: { ok: true, ms: 1 }, activeAlerts: [] });
+  assert.equal(h.store.fleet()[0].skewMs, 40);
+  const first = h.store.ingest({ phase: 'NEW', label: 'pool-1', seq: 2, sentAt: h.now(), sidecar, alert: stall(), bundle: { label: 'pool-1', logs: [], sidecar } });
+  const dup = h.store.ingest({ phase: 'NEW', label: 'pool-1', seq: 2, sentAt: h.now(), sidecar, alert: stall(), bundle: { label: 'pool-1', logs: [], sidecar } });
+  assert.equal(dup.duplicate, true);
+  assert.equal(first.updates.length, 1);
+
+  // sidecar restarted: seq starts over and must not be treated as a duplicate
+  const sidecar2 = { startedAt: 2, host: 'a' };
+  const hb = h.store.ingest({ phase: 'HEARTBEAT', label: 'pool-1', seq: 1, sentAt: h.now(), sidecar: sidecar2, at: h.now(), tip: { height: 2, at: h.now() }, rpc: { ok: true, ms: 1 }, activeAlerts: [] });
+  assert.equal(hb.tip, 2);
+
+  h.store.flush();
+  const again = new Store(h.dir, { now: h.now });
+  assert.equal(again.nodes.get('pool-1').firstSeen, T0);
+  assert.equal(again.nodes.get('pool-1').lastSeq, 1);
+  h.advance(2 * MIN);
+  again.sweepQuiet();
+  assert.equal(again.fleet()[0].state, 'quiet'); // it was last seen before the restart
+});
+
 test('stats: percentiles over an empty and a small set', () => {
   assert.deepEqual(stats([]), { count: 0, mean: null, p50: null, p95: null, max: null });
   assert.deepEqual(stats([5, 1, 3]), { count: 3, mean: 3, p50: 3, p95: 5, max: 5 });

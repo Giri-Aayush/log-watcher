@@ -18,6 +18,7 @@
       <span title="semantic events parsed from those lines">events <b id="c-events">0</b></span>
       <span title="RPC polls">polls <b id="c-polls">0</b></span>
       <span title="pages sent (alerts + resolves)">pages <b id="c-pages">0</b></span>
+      <span title="messages delivered to the collector (queued, waiting for it)" id="c-delivery-wrap" hidden>delivered <b id="c-delivery">0</b></span>
     </div>
     <div id="status" class="pill">connecting</div>
   </header>
@@ -142,6 +143,13 @@ function alertHtml(a, resolved) {
 
 function renderCounters() {
   for (const k of ['lines', 'events', 'polls', 'pages']) $('c-' + k).textContent = (counters[k] || 0).toLocaleString();
+  const d = counters.delivery;
+  $('c-delivery-wrap').hidden = !d;
+  if (d) {
+    $('c-delivery').textContent = d.delivered.toLocaleString() + (d.queued ? ` (+${d.queued} queued)` : '');
+    $('c-delivery').style.color = d.consecutiveFailures ? 'var(--bad)' : '';
+    $('c-delivery-wrap').title = d.consecutiveFailures ? `collector unreachable: ${d.lastError}; ${d.queued} queued, retrying` : 'messages delivered to the collector';
+  }
 }
 
 function eventHtml(e) {

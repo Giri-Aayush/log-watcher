@@ -10,6 +10,7 @@ const { Detectors } = require('./detectors');
 const { AlertManager } = require('./alerts');
 const { buildSinks } = require('./sinks');
 const { makeTriage } = require('./triage');
+const { Outbox } = require('./outbox');
 
 // log source ─┐
 //             ├─> parse ─> events ─> Detectors ─> AlertManager ─> sinks
@@ -23,12 +24,15 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
   const logRing = new Ring(cfg.ringSize);
   const eventRing = new Ring(200);
   const counters = { lines: 0, events: 0, polls: 0, pages: 0 };
+  const outbox = new Outbox({ url: cfg.sinks.webhookUrl, now });
+  outbox.on('failing', (why) => bus.emit('error', new Error(`collector unreachable (${why}); queueing`)));
+  outbox.on('recovered', (n) => bus.emit('notice', `collector back after ${n} failed attempts; queue flushed`));
   const detectors = new Detectors(cfg, { now });
   const rpc = new ZebraRpc(cfg.rpc);
   const triage = cfg.triage.apiKey ? makeTriage(cfg.triage) : null;
   const alerts = new AlertManager({
     cfg: { ...cfg.alerts, label: cfg.label },
-    sinks: sinks || buildSinks(cfg.sinks),
+    sinks: sinks || buildSinks(cfg.sinks, { outbox, label: cfg.label }),
     logRing,
     getState: () => detectors.state,
     getSidecar: sidecarInfo,
@@ -57,11 +61,17 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
 
   let lastEntry = null;
   let lastDetailHeight = null;
+  // After a source reattaches (docker logs -f ends when the container
+  // restarts; we come back with --tail N) the first lines are ones we have
+  // already seen. Skip everything up to the last timestamp we ingested.
+  let skipUntil = 0;
+  let skippingContinuations = false;
 
   function ingestLine(raw) {
     if (!raw) return;
     const parsed = parseLine(raw);
     if (parsed.kind === 'continuation') {
+      if (skippingContinuations) return;
       if (lastEntry) {
         lastEntry.raw += `\n${parsed.text}`;
         lastEntry.message += `\n${parsed.text}`;
@@ -73,6 +83,12 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
       }
       return;
     }
+    if (skipUntil && parsed.time <= skipUntil) {
+      skippingContinuations = true;
+      return;
+    }
+    skipUntil = 0;
+    skippingContinuations = false;
     lastEntry = parsed;
     counters.lines++;
     // Node time vs. our time: a growing gap means the log stream itself is
@@ -172,9 +188,7 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
       logDelayMs: s.logDelayMs,
       activeAlerts: alerts.list().active.map((a) => ({ key: a.key, severity: a.severity, since: a.firstSeen })),
     };
-    fetch(cfg.sinks.webhookUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
-      .then((res) => { if (!res.ok) bus.emit('error', new Error(`heartbeat: HTTP ${res.status}`)); })
-      .catch((err) => bus.emit('error', new Error(`heartbeat: ${err.message}`)));
+    outbox.push(body);
   }
 
   let prevBuckets = null;
@@ -197,7 +211,10 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
   const src = source || makeSource(cfg);
   src.on('line', ingestLine);
   src.on('error', (err) => bus.emit('error', err));
-  src.on('exit', (info) => bus.emit('source_exit', info));
+  src.on('exit', (info) => {
+    if (lastEntry) skipUntil = lastEntry.time;
+    bus.emit('source_exit', info);
+  });
   src.on('rotate', (info) => bus.emit('source_rotate', info));
 
   const timers = [];
@@ -221,6 +238,7 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
   function stop() {
     for (const t of timers) clearInterval(t);
     timers.length = 0;
+    outbox.stop();
     if (typeof src.stop === 'function') src.stop();
   }
 
@@ -244,12 +262,12 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
       alerts: alerts.list(),
       logs: logRing.last(logLines),
       events: eventRing.last(logLines ? 60 : 0),
-      counters,
+      counters: { ...counters, delivery: cfg.sinks.webhookUrl ? outbox.stats : null },
       startedAt: detectors.state.startedAt,
     };
   }
 
-  return { cfg, bus, logRing, detectors, alerts, rpc, source: src, ingestLine, poll, pollMetrics, start, stop, snapshot };
+  return { cfg, bus, logRing, detectors, alerts, rpc, outbox, source: src, ingestLine, poll, pollMetrics, start, stop, snapshot };
 }
 
 module.exports = { createPipeline };

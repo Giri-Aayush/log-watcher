@@ -49,6 +49,9 @@ class Store {
 
   load() {
     try {
+      for (const n of JSON.parse(fs.readFileSync(path.join(this.dir, 'nodes.json'), 'utf8'))) this.nodes.set(n.label, { ...n, heartbeat: null, quiet: false });
+    } catch { /* first run */ }
+    try {
       for (const inc of JSON.parse(fs.readFileSync(path.join(this.dir, 'incidents.json'), 'utf8'))) this.incidents.set(inc.id, inc);
     } catch { /* first run */ }
     try {
@@ -60,15 +63,14 @@ class Store {
   // rewrite the file several times a second on a busy fleet.
   save() {
     clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => {
-      fs.writeFileSync(path.join(this.dir, 'incidents.json'), JSON.stringify([...this.incidents.values()]));
-      fs.writeFileSync(path.join(this.dir, 'series.json'), JSON.stringify(Object.fromEntries(this.series)));
-    }, 500);
+    this.saveTimer = setTimeout(() => this.flush(), 500);
     this.saveTimer.unref?.();
   }
 
   flush() {
     clearTimeout(this.saveTimer);
+    const nodes = [...this.nodes.values()].map(({ heartbeat, quiet, ...rest }) => rest); // heartbeat is transient
+    fs.writeFileSync(path.join(this.dir, 'nodes.json'), JSON.stringify(nodes));
     fs.writeFileSync(path.join(this.dir, 'incidents.json'), JSON.stringify([...this.incidents.values()]));
     fs.writeFileSync(path.join(this.dir, 'series.json'), JSON.stringify(Object.fromEntries(this.series)));
   }
@@ -80,16 +82,29 @@ class Store {
   node(label) {
     let n = this.nodes.get(label);
     if (!n) {
-      n = { label, firstSeen: this.now(), lastSeen: 0, heartbeat: null, quiet: false };
+      n = { label, firstSeen: this.now(), lastSeen: 0, lastSeq: 0, sidecarStartedAt: null, skewMs: null, heartbeat: null, quiet: false };
       this.nodes.set(label, n);
     }
     return n;
   }
 
+  // Messages carry a per-sidecar-process sequence number. A retry after a
+  // request that did land arrives with the same seq and is dropped; a
+  // restarted sidecar starts again from 1, recognisable by its startedAt.
   ingest(msg) {
     const now = this.now();
     const label = msg.label || (msg.bundle && msg.bundle.label) || 'unknown';
     const n = this.node(label);
+    const startedAt = msg.sidecar ? msg.sidecar.startedAt : (msg.bundle && msg.bundle.sidecar ? msg.bundle.sidecar.startedAt : null);
+    if (typeof msg.seq === 'number') {
+      if (startedAt && startedAt !== n.sidecarStartedAt) {
+        n.sidecarStartedAt = startedAt;
+        n.lastSeq = 0;
+      }
+      if (msg.seq <= n.lastSeq) return { duplicate: true, seq: msg.seq };
+      n.lastSeq = msg.seq;
+    }
+    if (typeof msg.sentAt === 'number') n.skewMs = now - msg.sentAt; // includes network latency; large values mean clocks
     n.lastSeen = now;
     if (n.quiet) {
       n.quiet = false;
@@ -210,7 +225,7 @@ class Store {
       const h = n.heartbeat || {};
       const state = n.quiet ? 'quiet' : open.some((i) => i.severity === 'critical') ? 'critical' : open.length ? 'degraded' : 'ok';
       return {
-        label: n.label, state, quiet: n.quiet, lastSeen: n.lastSeen, silentS: n.lastSeen ? Math.round((now - n.lastSeen) / 1000) : null,
+        label: n.label, state, quiet: n.quiet, lastSeen: n.lastSeen, silentS: n.lastSeen ? Math.round((now - n.lastSeen) / 1000) : null, skewMs: n.skewMs,
         node: h.node || null, tip: h.tip || null, tipAgeS: h.tip && h.tip.at ? Math.round((h.at - h.tip.at) / 1000) : null,
         peers: h.peers ?? null, rpc: h.rpc || null, mempool: h.mempool || null, sync: h.sync || null, logDelayMs: h.logDelayMs ?? null,
         sidecar: h.sidecar || null, open: open.map((i) => ({ id: i.id, key: i.key, severity: i.severity, since: i.pagedAt, acked: !!i.ackedAt })),
@@ -239,9 +254,11 @@ class Store {
     const open = incidents.filter((i) => !i.resolvedAt);
     const count = (arr, key) => arr.reduce((m, i) => { m[i[key]] = (m[i[key]] || 0) + 1; return m; }, {});
 
+    // detect and resolve are sidecar-clock to sidecar-clock; ack and respond
+    // are collector-clock to collector-clock (receivedAt). No gap mixes clocks.
     const detect = stats(incidents.map((i) => i.pagedAt - i.onsetAt));
-    const ack = stats(incidents.filter((i) => i.ackedAt).map((i) => i.ackedAt - i.pagedAt));
-    const respond = stats(incidents.filter((i) => i.respondedAt).map((i) => i.respondedAt - i.pagedAt));
+    const ack = stats(incidents.filter((i) => i.ackedAt).map((i) => i.ackedAt - i.receivedAt));
+    const respond = stats(incidents.filter((i) => i.respondedAt).map((i) => i.respondedAt - i.receivedAt));
     const resolve = stats(incidents.filter((i) => i.resolvedAt).map((i) => i.resolvedAt - i.onsetAt));
     const duration = stats(incidents.filter((i) => i.resolvedAt).map((i) => i.resolvedAt - i.pagedAt));
 
@@ -271,10 +288,11 @@ class Store {
     const unacked = open.filter((i) => !i.ackedAt);
     return {
       window: windowMs, at: now,
+      delivery: stats(all.map((i) => i.receivedAt - i.pagedAt)), // page -> here, includes skew
       totals: { incidents: incidents.length, events: events.length, open: open.length, unacked: unacked.length, nodes: this.nodes.size, quietNodes: [...this.nodes.values()].filter((n) => n.quiet).length },
       bySeverity: count(incidents, 'severity'), byKey: count(incidents, 'key'), byNode: count(incidents, 'label'),
       latency: { detect, ack, respond, resolve, duration },
-      oldestUnackedS: unacked.length ? Math.round((now - unacked[0].pagedAt) / 1000) : null,
+      oldestUnackedS: unacked.length ? Math.round((now - unacked[0].receivedAt) / 1000) : null,
       timeline: { bucketMs, buckets },
       perNode,
       noisiest: Object.entries(count(incidents, 'key')).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([key, n]) => ({ key, count: n })),

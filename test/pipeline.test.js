@@ -43,6 +43,7 @@ function build(url, thresholds = {}) {
   const sent = [];
   const source = new EventEmitter();
   const p = createPipeline(cfg, { sinks: [{ name: 't', send: async (m) => sent.push(`${m.phase} ${m.alert.key}`) }], source });
+  p.bus.on('error', () => {}); // background getblock failures are logged by server.js, not fatal
   return { p, sent, source };
 }
 
@@ -99,5 +100,22 @@ test('snapshot exposes what the dashboard needs', async () => {
   assert.equal(p.snapshot(0).logs.length, 0); // /api/state leaves the log out
   assert.equal(s.state.sync.state, 'at_tip');
   assert.ok(s.thresholds.tipStallMin);
+  node.server.close();
+});
+
+test('lines replayed after a source reattach are skipped', async () => {
+  const node = await fakeNode();
+  const { p, source } = build(node.url);
+  const t = Date.now() - 5000;
+  source.emit('line', committedAt(4345595, t));
+  source.emit('line', committedAt(4345596, t + 1000));
+  source.emit('exit', { code: 0 });
+  source.emit('line', committedAt(4345595, t));       // docker logs --tail replays
+  source.emit('line', committedAt(4345596, t + 1000));
+  source.emit('line', committedAt(4345597, t + 2000)); // genuinely new
+  const s = p.snapshot();
+  assert.equal(s.counters.lines, 3);
+  assert.equal(s.state.tip.height, 4345597);
+  await new Promise((r) => setTimeout(r, 50)); // let the getblock detail calls finish
   node.server.close();
 });

@@ -21,10 +21,21 @@ const consoleSink = {
   },
 };
 
-function webhookSink(url) {
+// The collector gets its messages through the outbox (ordered, retried),
+// not a bare POST: a page must not be lost because the collector was
+// restarting at the wrong moment.
+function outboxSink(outbox, label) {
   return {
-    name: 'webhook',
-    send: ({ alert, phase, text }) => post(url, { phase, text, alert: { ...alert, bundle: undefined }, bundle: alert.bundle }),
+    name: 'collector',
+    send: async ({ alert, phase, text }) => {
+      outbox.push({
+        phase,
+        label,
+        text,
+        alert: { ...alert, bundle: undefined, resolvedBundle: undefined },
+        bundle: phase === 'RESOLVED' && alert.resolvedBundle ? alert.resolvedBundle : alert.bundle,
+      });
+    },
   };
 }
 
@@ -46,13 +57,13 @@ function signalSink(url, number, recipient) {
   };
 }
 
-function buildSinks(cfg) {
+function buildSinks(cfg, { outbox, label } = {}) {
   const sinks = [consoleSink];
-  if (cfg.webhookUrl) sinks.push(webhookSink(cfg.webhookUrl));
+  if (cfg.webhookUrl && outbox) sinks.push(outboxSink(outbox, label));
   if (cfg.discordWebhook) sinks.push(discordSink(cfg.discordWebhook));
   if (cfg.telegramToken && cfg.telegramChat) sinks.push(telegramSink(cfg.telegramToken, cfg.telegramChat));
   if (cfg.signalUrl && cfg.signalNumber) sinks.push(signalSink(cfg.signalUrl, cfg.signalNumber, cfg.signalRecipient));
   return sinks;
 }
 
-module.exports = { buildSinks, consoleSink, webhookSink, discordSink, telegramSink, signalSink };
+module.exports = { buildSinks, consoleSink, outboxSink, discordSink, telegramSink, signalSink };
