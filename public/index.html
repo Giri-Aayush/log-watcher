@@ -1,134 +1,180 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>Enhanced Log Monitor</title>
-    <script src="/socket.io/socket.io.js"></script>
-    <link rel="stylesheet" href="styles.css">
-  </head>
-  <body>
-    <div class="header">
-      <h1>Enhanced Log Monitor</h1>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>log-watcher</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>log-watcher <span id="label"></span></h1>
+      <div class="sub"><span id="source"></span> · rpc <span id="rpc-url"></span></div>
     </div>
+    <div id="status" class="pill">connecting</div>
+  </header>
 
-    <div class="stats">
-      <h2>Statistics</h2>
-      <div>Total Lines: <span id="total-lines">0</span></div>
-      <div>Error Count: <span id="error-count">0</span></div>
-      <div>Warning Count: <span id="warning-count">0</span></div>
-      <div>Update Interval: <span id="update-interval">0</span>ms</div>
-    </div>
+  <section class="cards">
+    <div class="card"><div class="k">node</div><div class="v" id="node">–</div><div class="s" id="node-sub"></div></div>
+    <div class="card"><div class="k">tip</div><div class="v" id="tip">–</div><div class="s" id="tip-sub"></div></div>
+    <div class="card"><div class="k">peers</div><div class="v" id="peers">–</div><div class="s" id="peers-sub"></div></div>
+    <div class="card"><div class="k">rpc</div><div class="v" id="rpc">–</div><div class="s" id="rpc-sub"></div></div>
+    <div class="card"><div class="k">mempool</div><div class="v" id="mempool">–</div><div class="s" id="mempool-sub"></div></div>
+    <div class="card"><div class="k">last block</div><div class="v" id="block">–</div><div class="s" id="block-sub"></div></div>
+    <div class="card"><div class="k">sync</div><div class="v" id="sync">–</div><div class="s" id="sync-sub"></div></div>
+    <div class="card"><div class="k">warn / error</div><div class="v" id="warns">–</div><div class="s" id="warns-sub"></div></div>
+  </section>
 
-    <div class="search-container">
-      <input type="text" id="search-input" placeholder="Search logs..." onkeyup="filterLogs()"/>
-      <div class="filter-buttons">
-        <button class="filter-button active" onclick="toggleFilter('all')">All</button>
-        <button class="filter-button active" onclick="toggleFilter('ERROR')">Errors</button>
-        <button class="filter-button active" onclick="toggleFilter('WARNING')">Warnings</button>
-        <button class="filter-button active" onclick="toggleFilter('INFO')">Info</button>
+  <section class="panel">
+    <div class="panel-head"><h2>Active alerts</h2><span class="muted" id="active-count"></span></div>
+    <div id="alerts" class="alerts"><div class="empty">nothing active</div></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Recent</h2></div>
+    <div id="history" class="history"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Log</h2>
+      <div class="controls">
+        <input type="search" id="search" placeholder="filter (target, message, fields)">
+        <label><input type="checkbox" class="lvl" value="ERROR" checked> error</label>
+        <label><input type="checkbox" class="lvl" value="WARN" checked> warn</label>
+        <label><input type="checkbox" class="lvl" value="INFO" checked> info</label>
+        <label><input type="checkbox" id="follow" checked> follow</label>
       </div>
     </div>
+    <div id="log" class="log"></div>
+  </section>
 
-    <div id="message-container"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const socket = io();
+let state = null;
+let logs = [];
+let active = [];
+let history = [];
+let thresholds = {};
 
-    <script>
-      const socket = io();
-      const messageContainer = document.getElementById("message-container");
-      let allLogs = [];
-      let activeFilters = ["all", "ERROR", "WARNING", "INFO"];
+function age(ms) {
+  if (ms == null) return '';
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 90) return s + 's';
+  const m = Math.floor(s / 60);
+  return m < 90 ? m + 'm ' + (s % 60) + 's' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
+}
+const fmtTs = (t) => new Date(t).toISOString().slice(11, 19) + 'Z';
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-      function updateStats(stats) {
-        document.getElementById("total-lines").textContent = stats.totalLines;
-        document.getElementById("error-count").textContent = stats.errorCount;
-        document.getElementById("warning-count").textContent = stats.warningCount;
-        document.getElementById("update-interval").textContent = 
-            Math.round(stats.averageUpdateInterval);
-      }
+function renderState() {
+  if (!state) return;
+  const now = Date.now();
+  const n = state.node || {};
+  $('node').textContent = n.build || n.version || '?';
+  $('node-sub').textContent = [n.network, n.subversion].filter(Boolean).join(' · ');
+  const tip = state.tip || {};
+  $('tip').textContent = tip.height ?? '–';
+  const tipAge = tip.at ? now - tip.at : null;
+  $('tip-sub').textContent = tip.at ? age(tipAge) + ' ago via ' + tip.source : 'no block seen yet';
+  $('tip').className = 'v' + (tipAge != null && thresholds.tipStallMin > 0 && tipAge > thresholds.tipStallMin * 60000 ? ' bad' : '');
+  $('peers').textContent = state.peers ?? '–';
+  $('peers').className = 'v' + (state.peers != null && state.peers < thresholds.minPeers ? ' bad' : '');
+  $('peers-sub').textContent = 'minimum ' + thresholds.minPeers;
+  const r = state.rpc || {};
+  $('rpc').textContent = r.ok === false ? 'DOWN' : r.ms != null ? r.ms + ' ms' : '–';
+  $('rpc').className = 'v' + (r.ok === false ? ' bad' : r.ms > thresholds.rpcSlowMs ? ' warn' : '');
+  $('rpc-sub').textContent = r.ok === false ? (r.lastError && r.lastError.message) || '' : r.at ? 'polled ' + age(now - r.at) + ' ago' : '';
+  const m = state.mempool || {};
+  $('mempool').textContent = m.size ?? '–';
+  $('mempool-sub').textContent = m.bytes != null ? (m.bytes / 1024).toFixed(0) + ' KiB' : '';
+  const b = state.lastBlock;
+  $('block').textContent = b ? b.height : '–';
+  $('block-sub').textContent = b ? `${b.txs} txs · ${(b.size / 1024).toFixed(1)} KiB · lag ${b.lagS}s` : '';
+  const s = state.sync || {};
+  $('sync').textContent = s.state ? s.state.replace('_', ' ') : '–';
+  $('sync-sub').textContent = s.percent != null ? s.percent + '%' + (s.remaining ? ` · ${s.remaining} left` : '') : '';
+  $('sync').className = 'v' + (s.state === 'stalled' ? ' bad' : '');
+  const l = state.log || {};
+  $('warns').textContent = (l.warnCount || 0) + ' / ' + (l.errorCount || 0);
+  $('warns-sub').textContent = l.lastWarnError ? l.lastWarnError.message.slice(0, 60) : 'since start';
+  if (state.haltHeight) $('node-sub').textContent += ` · halts at ${state.haltHeight}`;
 
-      function getLogType(log) {
-        const logString = typeof log === "object" ? log.content : String(log);
-        if (logString.includes("[ERROR]")) return "ERROR";
-        if (logString.includes("[WARNING]")) return "WARNING";
-        return "INFO";
-      }
+  const crit = active.some((a) => a.severity === 'critical');
+  $('status').textContent = crit ? 'critical' : active.length ? 'degraded' : r.ok === false ? 'rpc down' : 'ok';
+  $('status').className = 'pill ' + (crit || r.ok === false ? 'bad' : active.length ? 'warn' : 'ok');
+}
 
-      function appendLog(log) {
-        const div = document.createElement("div");
-        const logString = typeof log === "object" ? log.content : String(log);
-        const type = getLogType(logString);
-        div.className = `log-entry ${type.toLowerCase()}`;
-        div.textContent = logString;
+function alertHtml(a, resolved) {
+  const since = age(Date.now() - a.firstSeen);
+  const ev = Object.entries(a.evidence || {}).filter(([, v]) => v != null && typeof v !== 'object').map(([k, v]) => `${k}=${esc(v)}`).join(' ');
+  return `<div class="alert ${a.severity}${resolved ? ' resolved' : ''}">
+    <div class="alert-head">
+      <span class="sev">${resolved ? 'resolved' : a.severity}</span>
+      <span class="key">${esc(a.key)}</span>
+      <span class="title">${esc(a.title)}</span>
+      <span class="meta">${a.count > 1 ? 'x' + a.count + ' · ' : ''}${resolved ? age(Date.now() - a.resolved.at) + ' ago' : since}</span>
+    </div>
+    ${a.detail ? `<div class="detail">${esc(a.detail)}</div>` : ''}
+    ${resolved && a.resolved.detail ? `<div class="detail muted">${esc(a.resolved.detail)}</div>` : ''}
+    ${ev ? `<div class="evidence">${ev}</div>` : ''}
+    ${a.suggest && !resolved ? `<div class="suggest">next: ${esc(a.suggest)}</div>` : ''}
+    ${a.triage ? `<details class="triage"><summary>triage draft (${esc(a.triage.model)}) — for a human to approve</summary><pre>${esc(a.triage.text)}</pre></details>` : ''}
+    <div class="links"><a href="/api/alerts/${encodeURIComponent(a.id)}" target="_blank">bundle</a></div>
+  </div>`;
+}
 
-        div.style.display = 
-            activeFilters.includes(type) || activeFilters.includes("all") ? "" : "none";
+function renderAlerts() {
+  $('active-count').textContent = active.length ? active.length + ' active' : '';
+  $('alerts').innerHTML = active.length ? active.map((a) => alertHtml(a, false)).join('') : '<div class="empty">nothing active</div>';
+  const recent = history.filter((h) => h.transient || h.resolved).slice(0, 12);
+  $('history').innerHTML = recent.length ? recent.map((a) => alertHtml(a, !!a.resolved)).join('') : '<div class="empty">no history yet</div>';
+}
 
-        messageContainer.appendChild(div);
-        messageContainer.scrollTop = messageContainer.scrollHeight;
-      }
+function logLineHtml(e) {
+  const fields = Object.entries(e.fields || {}).map(([k, v]) => `<span class="f">${esc(k)}=<b>${esc(v)}</b></span>`).join(' ');
+  return `<div class="line ${e.level}"><span class="ts">${esc(e.ts.slice(11, 23))}</span><span class="lvl">${e.level}</span><span class="tgt">${esc((e.target || '').replace(/^zebrad?::|^zebra_/, ''))}</span><span class="msg">${esc(e.message)}</span> ${fields}</div>`;
+}
 
-      function filterLogs() {
-        const searchTerm = document.getElementById("search-input").value.toLowerCase();
-        const logEntries = messageContainer.getElementsByClassName("log-entry");
+function passes(e) {
+  const q = $('search').value.trim().toLowerCase();
+  const lv = [...document.querySelectorAll('.lvl:checked')].map((c) => c.value);
+  if (!lv.includes(e.level) && !(e.level === 'DEBUG' || e.level === 'TRACE')) return false;
+  if (!q) return true;
+  return e.raw.toLowerCase().includes(q);
+}
 
-        Array.from(logEntries).forEach((entry) => {
-          const type = getLogType(entry.textContent);
-          const matchesSearch = entry.textContent.toLowerCase().includes(searchTerm);
-          const matchesFilter = activeFilters.includes(type) || activeFilters.includes("all");
-          entry.style.display = matchesSearch && matchesFilter ? "" : "none";
-        });
-      }
+function renderLog() {
+  const el = $('log');
+  el.innerHTML = logs.filter(passes).slice(-400).map(logLineHtml).join('');
+  if ($('follow').checked) el.scrollTop = el.scrollHeight;
+}
 
-      function toggleFilter(filter) {
-        const button = document.querySelector(`[onclick="toggleFilter('${filter}')"]`);
-        button.classList.toggle("active");
+socket.on('init', (snap) => {
+  state = snap.state; logs = snap.logs; active = snap.alerts.active; history = snap.alerts.history; thresholds = snap.thresholds;
+  $('label').textContent = snap.label; $('source').textContent = snap.source; $('rpc-url').textContent = snap.rpcUrl;
+  renderState(); renderAlerts(); renderLog();
+});
+socket.on('state', (s) => { state = s; renderState(); });
+socket.on('log', (e) => {
+  logs.push(e); if (logs.length > 2000) logs.shift();
+  if (passes(e)) { const el = $('log'); el.insertAdjacentHTML('beforeend', logLineHtml(e)); while (el.children.length > 400) el.firstChild.remove(); if ($('follow').checked) el.scrollTop = el.scrollHeight; }
+});
+socket.on('alert', (a) => {
+  const upsert = (arr) => { const i = arr.findIndex((x) => x.id === a.id); if (i === -1) arr.unshift(a); else arr[i] = a; };
+  if (!a.transient && !a.resolved) upsert(active);
+  upsert(history);
+  renderAlerts(); renderState();
+});
+socket.on('resolve', (a) => { active = active.filter((x) => x.key !== a.key); const i = history.findIndex((x) => x.id === a.id); if (i !== -1) history[i] = a; else history.unshift(a); renderAlerts(); renderState(); });
+socket.on('disconnect', () => { $('status').textContent = 'disconnected'; $('status').className = 'pill bad'; });
 
-        if (filter === "all") {
-          if (button.classList.contains("active")) {
-            activeFilters = ["all", "ERROR", "WARNING", "INFO"];
-            document.querySelectorAll(".filter-button")
-                .forEach((btn) => btn.classList.add("active"));
-          } else {
-            activeFilters = [];
-            document.querySelectorAll(".filter-button")
-                .forEach((btn) => btn.classList.remove("active"));
-          }
-        } else {
-          if (button.classList.contains("active")) {
-            if (!activeFilters.includes(filter)) activeFilters.push(filter);
-          } else {
-            activeFilters = activeFilters.filter((f) => f !== filter);
-          }
-
-          const allTypesSelected = ["ERROR", "WARNING", "INFO"]
-              .every((type) => activeFilters.includes(type));
-          document.querySelector("[onclick=\"toggleFilter('all')\"]")
-              .classList.toggle("active", allTypesSelected);
-          if (allTypesSelected && !activeFilters.includes("all")) activeFilters.push("all");
-          if (!allTypesSelected) activeFilters = activeFilters.filter((f) => f !== "all");
-        }
-
-        filterLogs();
-      }
-
-      socket.on("connect", () => {
-        console.log("Connected to server");
-      });
-
-      socket.on("init", function (data) {
-        console.log("Received init data:", data);
-        messageContainer.innerHTML = "";
-        allLogs = data.lines;
-        data.lines.forEach((log) => appendLog(log));
-        updateStats(data.stats);
-      });
-
-      socket.on("update-log", function (data) {
-        console.log("Received update data:", data);
-        data.lines.forEach((log) => {
-          allLogs.push(log);
-          appendLog(log);
-        });
-        updateStats(data.stats);
-      });
-    </script>
-  </body>
+$('search').addEventListener('input', renderLog);
+for (const c of document.querySelectorAll('.lvl')) c.addEventListener('change', renderLog);
+setInterval(() => { renderState(); if (active.length) renderAlerts(); }, 5000);
+</script>
+</body>
 </html>
