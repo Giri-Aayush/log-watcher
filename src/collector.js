@@ -276,12 +276,14 @@ class Store {
           transient: false, onsetAt: Math.min(...affected.map((i) => i.onsetAt)), pagedAt: now, receivedAt: now,
           ackedAt: null, ackedBy: null, respondedAt: null, respondedBy: null, resolvedAt: null, resolvedDetail: null, closedBy: null,
           escalations: 0, renotified: 0, notes: [], updates: [{ phase: 'NEW', at: now }], bundleFile: null, members: [],
+          scope: 'network', confidence: 'high', scopeNote: '',
         };
         this.incidents.set(net.id, net);
       }
       net.members = affected.map((i) => i.id);
       net.evidence = { key, network, nodes: [...affectedLabels].sort(), of: nodes.length };
       net.title = `${key.replace('_', ' ')} on ${affectedLabels.size} of ${nodes.length} ${network} nodes`;
+      net.scopeNote = `${affectedLabels.size} of ${nodes.length} ${network} nodes report ${key} together`;
       net.detail = `${[...affectedLabels].sort().join(', ')} report ${key} together. That is the network (or Zero's view of it), not ${affectedLabels.size} separate customer problems.`;
       for (const i of affected) {
         if (!i.suppressedBy) { i.suppressedBy = net.id; i.updates.push({ phase: 'SUPPRESSED', at: now, by: net.id }); }
