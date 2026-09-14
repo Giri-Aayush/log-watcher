@@ -305,6 +305,13 @@ class Store {
         break;
       case 'triage':
         break;
+      // The JD's third bullet, as a field: what changed in Zero because of this
+      // incident — a detector, a threshold, a runbook line, an upstream PR.
+      case 'improvement':
+        if (!text) throw new Error('an improvement needs text');
+        inc.improvements = inc.improvements || [];
+        inc.improvements.push({ at: now, by, text });
+        break;
       default:
         throw new Error(`unknown action ${action}`);
     }
@@ -397,6 +404,8 @@ class Store {
     });
 
     const unacked = open.filter((i) => !i.ackedAt);
+    const closed = incidents.filter((i) => i.resolvedAt);
+    const withImprovement = closed.filter((i) => i.improvements && i.improvements.length);
     // fleet availability: share of node-time in the window with no critical open
     const knownMs = perNode.reduce((a, n) => a + Math.min(windowMs, now - (this.nodes.get(n.label).firstSeen)), 0);
     const criticalMs = perNode.reduce((a, n) => a + n.criticalMs, 0);
@@ -405,6 +414,8 @@ class Store {
       availability: knownMs > 0 ? Math.max(0, 1 - criticalMs / knownMs) : null,
       delivery: stats(all.map((i) => i.receivedAt - i.pagedAt)), // page -> here, includes skew
       totals: { incidents: incidents.length, events: events.length, open: open.length, unacked: unacked.length, suppressed: suppressed.length, nodes: this.nodes.size, quietNodes: [...this.nodes.values()].filter((n) => n.quiet).length },
+      // how many closed incidents left Zero better than they found it
+      improvements: { closed: closed.length, withImprovement: withImprovement.length, rate: closed.length ? withImprovement.length / closed.length : null },
       bySeverity: count(incidents, 'severity'), byKey: count(incidents, 'key'), byNode: count(incidents, 'label'),
       latency: { detect, ack, respond, resolve, duration },
       oldestUnackedS: unacked.length ? Math.round((now - unacked[0].receivedAt) / 1000) : null,

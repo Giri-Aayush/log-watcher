@@ -261,3 +261,15 @@ test('triage endpoint: stores the draft and records who asked; 503 without crede
   assert.match((await r2.json()).error, /ANTHROPIC_API_KEY/);
   withModel.stop(); without.stop(); a.close(); b.close();
 });
+
+test('an improvement is recorded on the incident and counted once it is closed', () => {
+  const h = harness();
+  h.alert('NEW', stall());
+  assert.throws(() => h.store.act('inc-1', 'improvement', { by: 'aayush' }), /needs text/);
+  h.store.act('inc-1', 'improvement', { by: 'aayush', text: 'tip_stalled now checks a second node before paging; upstream zebra#1234' });
+  assert.equal(h.store.analytics().improvements.withImprovement, 0, 'still open: not counted yet');
+  h.store.act('inc-1', 'close', { by: 'aayush', text: 'done' });
+  const a = h.store.analytics();
+  assert.deepEqual(a.improvements, { closed: 1, withImprovement: 1, rate: 1 });
+  assert.equal(h.store.incidents.get('inc-1').improvements[0].by, 'aayush');
+});
