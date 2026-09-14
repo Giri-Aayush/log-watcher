@@ -1,9 +1,14 @@
 # log-watcher
 
-A sidecar for a [Zebra](https://github.com/ZcashFoundation/zebra) node. It tails
-the node's log, polls its RPC, and pages the moment something an operator would
-care about happens — with the evidence attached, so the engineer who picks up the
-page starts reproducing instead of asking for logs.
+A sidecar for a [Zebra](https://github.com/ZcashFoundation/zebra) node, and the
+console on the other end. The sidecar tails the node's log, polls its RPC, and
+pages the moment something an operator would care about happens — with the
+evidence attached, so the engineer who picks up the page starts reproducing
+instead of asking for logs. The console keeps the incident record, measures how
+fast each one was detected, acknowledged, answered and resolved, tells node
+trouble from network trouble across the fleet, writes the customer's incident
+report, and turns what was learned into a known issue the next incident is
+matched against.
 
 Built for the way [Zero](https://github.com/ShieldedLabs/zero) supports exchanges,
 mining pools and wallets: the operator runs the sidecar next to `zebrad`, the
@@ -15,10 +20,20 @@ This started life in 2023 as a `tail -f` in a browser. After talking to Shielded
 Labs about what Zero actually needs, it became this.
 
 ```
-zebrad ──log (file / docker / journald)──▶ parse ──▶ events ──▶ detectors ──▶ alerts ──▶ Signal / Telegram / Discord / webhook
-   └──── JSON-RPC (cookie auth) ───────▶ poll  ──▶ state  ──┘       │                 └──▶ bundles/<id>.json
-   └──── Prometheus (optional) ────────▶ p99  ──┘                   └──▶ dashboard :3000
+customer's box                                                  Zero's side
+─────────────────────────────────────────────────────────       ──────────────────────────────────────
+zebrad ──log (file / docker / journald / ssh)──▶ SIDECAR ──outbox──▶ COLLECTOR ──▶ Overview · Incident · Node
+   └──── JSON-RPC (cookie auth) ─────────────▶    │                     │  incident record, response times
+   └──── Prometheus (optional) ──────────────▶    │ detect → page       │  fleet correlation, known issues
+                                                  ├──▶ Signal / Telegram│  customer reports, Claude analysis
+                                                  │    Discord / webhook│
+                                                  └──▶ own page :3000   └──▶ console :4000
 ```
+
+Two tiers on purpose. The edge detects and pages by itself — there is no pipeline
+between a signal and the page, and the sidecar keeps working when the collector
+is down. The collector remembers and compares. Everything is outbound from the
+customer's box; nobody opens a port.
 
 ## What it pages on
 
@@ -51,7 +66,11 @@ threshold. Three exchanges stalling together is the chain, not three customers.
 
 Stateful alerts raise once, re-notify after a cooldown (30 min) or on escalation,
 and send a RESOLVED message when the condition clears. Moments (a restart, one big
-block) are transient and rate-limited per key.
+block) are transient and rate-limited per key. `tip_stalled` is re-checked over
+RPC before it pages: if the tip moved in the meantime the page is dropped, and
+the page that does go out says `confirmedOverRpc`. Alert ids are derived from
+label, key and onset minute, so a sidecar restart re-raises the *same* incident
+rather than a second one.
 
 Every pattern comes from a running node or from `zebrad`'s source
 (`components/sync/progress.rs`, `end_of_support.rs`); `test/fixtures.js` holds
@@ -143,11 +162,16 @@ The page itself is one HTTP POST to a loopback Signal bridge: sub-second.
 ### Live demo on a real node
 
 ```bash
-scripts/demo-live.sh up          # regtest zebrad + sidecar + collector, opens both dashboards
-scripts/demo-live.sh mine 3      # blocks arrive
-scripts/demo-live.sh kill        # rpc_down
+scripts/demo-live.sh node        # writes a regtest zebrad.toml and prints the zebrad command
+zebrad -c .regtest/zebrad.toml start 2>&1 | tee .regtest/zebrad.log     # terminal 1: the node
+scripts/demo-live.sh attach      # terminal 2: sidecar + collector, opens :3000 and :4000
+scripts/demo-live.sh mine 3      # blocks arrive; wait a minute for tip_stalled
+scripts/demo-live.sh kill        # rpc_down, with a silent log
 scripts/demo-live.sh revive      # node_restarted, RESOLVED, tip_rewound
+scripts/demo-live.sh twin        # a second sidecar on the same node: one network incident, not two
 ```
+
+`scripts/demo-live.sh up` does all of it in one terminal.
 
 [DEMO.md](DEMO.md) is the runbook: what to run, what appears, what to say.
 
@@ -215,27 +239,62 @@ next: Compare height with a public explorer or a second node. If they moved on, 
 bundle: bundles/2026-09-14T11-28-33-120Z-tip_stalled-7.json
 ```
 
-### The collector (Zero side)
+### The console (Zero side)
 
-`scripts/collector.js` is the other end of `LW_WEBHOOK_URL`. It keeps an
-incident per stateful alert with the timestamps the response metrics are built
-from — onset, paged, acknowledged, responded (told the operator), resolved — and
-serves the Overview at `/` (built from the mock in [design/](design/)): p50/p95
-of each gap over a window, oldest unacknowledged, availability, incidents per
-hour, the fleet table, and the open incidents with Ack / Responded / Close.
-Every value on it comes from `/api/analytics`, `/api/fleet` and
-`/api/incidents`. Each incident can record what changed in Zero because of it (`POST
-…/improvement`: a detector, a threshold, a runbook line, an upstream PR); the
-analytics report how many closed incidents left one behind, which is the JD's
-"each engagement ends as a permanent improvement" as a number.
-`GET /api/incidents/<id>/report` renders the customer-facing
-incident report (Markdown: summary, timeline, response times, evidence, node at
-page time, the engineer's notes as analysis, recommendations) from the same
-record; `POST …/report` marks it sent. Every
-bundle is stored under `collected/bundles/<label>/`; heartbeats become a per-node
-series (`/api/series/<label>`). A node that stops sending heartbeats is marked
-quiet after 60 s. One process, JSON on disk, no auth: the shape of the design,
-not the production service.
+`scripts/collector.js` is the other end of `LW_WEBHOOK_URL`: one process, JSON on
+disk, four pages built from the mocks in [design/](design/). Every number on
+them comes from `/api/*`; there is no sample data anywhere.
+
+- **Overview** (`/`) — nodes, open and unacknowledged incidents; p50/p95 of time
+  to detect, acknowledge, respond and resolve over 1h…30d; oldest unacknowledged;
+  availability (node-time with no critical open); noisiest detector; incidents
+  per hour; the fleet table (state, zebrad build, network, tip and its age,
+  peers, RPC, mempool, log lag); open incidents with Ack / Responded / Close.
+- **Incident** (`/incident.html?id=`) — the lifecycle on one clock (onset → paged →
+  acknowledged → responded → resolved), scope and confidence, the detector's
+  evidence and `next:` list, RPC latency for the hour around the page, the log
+  excerpt with both timestamps, the node snapshot at page time, the analysis
+  draft, what changed in Zero because of this, known-issue matches, the audit
+  trail, and the bundles.
+- **Node** (`/node.html?label=`) — tip age, RPC latency, peers and mempool over the
+  window, log lag, the node's incident history with each gap per row, the
+  sidecar's identity and the thresholds it is running with.
+- **Sidecar** (`:3000` on the box) — the operator's own view: pipeline counters,
+  tiles, active alerts with delivery state, last block, parsed events, live log.
+
+What the collector does with a page:
+
+- **Incident record.** One per stateful alert: onset, paged, received, acked,
+  responded (what was told to the operator), resolved, closed with a reason,
+  escalations, notes, improvements, known-issue matches, scope, analysis, report
+  sent. `POST /api/incidents/<id>/{ack,respond,note,improvement,close,report,
+  triage,promote}`.
+- **Scope, with confidence.** `node` when the other nodes on that network are
+  fine; `network` when it is correlated; `unknown` with the reason ("only node
+  watched on Testnet; cannot compare"). Printed in the header and the report.
+- **Fleet correlation.** A critical stall on at least half the nodes of one
+  network (minimum two) becomes one `network_<key>` incident; the members are
+  suppressed until the fleet recovers.
+- **Restart reconciliation.** A sidecar's first heartbeat after a restart closes
+  the incidents its previous process did not re-raise and supersedes any it
+  raised under a fresh id. A restart never duplicates an incident.
+- **Close reasons become precision.** Closing with "fixed", "false positive",
+  "expected" or "duplicate" feeds a per-detector count, so a noisy detector shows
+  up as a number rather than a feeling.
+- **Improvements become a rate.** Each incident can record what changed in Zero
+  because of it (a detector, a threshold, a runbook line, an upstream PR); the
+  analytics report the share of closed incidents that left one behind — the
+  JD's "each engagement ends as a permanent improvement" as a number.
+- **Customer report.** `GET /api/incidents/<id>/report` renders the incident
+  report in Markdown from the same record: summary in sentences, scope, UTC
+  timeline including notes, response-time table, evidence, node at page time,
+  the engineer's notes as analysis, what changed in Zero, recommendations, and a
+  footer stating which share policy the data left the box under.
+- **Heartbeats** become a per-node series (`/api/series/<label>`); a node that
+  stops sending is marked quiet after 60 s. Bundles land under
+  `collected/bundles/<label>/`.
+
+No auth, no TLS, JSON files: the shape of the design, not the production service.
 
 ### Configuration
 
@@ -250,7 +309,7 @@ node needs `mining.miner_address` set, as a pool's does).
 ## Tests
 
 ```bash
-npm test                # unit + pipeline against a fake RPC server (~0.6 s)
+npm test                # 82 tests: parser, tailer, detectors, outbox, collector, report, triage, pipeline (~0.8 s)
 npm run test:regtest    # real zebrad in regtest: mine 3 blocks, kill it, expect the page (~1.5 s)
 scripts/regtest.sh start && eval "$(scripts/regtest.sh env)" && npm start   # poke at it by hand
 scripts/regtest.sh mine 3
@@ -260,6 +319,15 @@ The regtest test needs `zebrad` on `PATH` and is skipped otherwise.
 
 ## Not done, on purpose
 
+- This is a Node.js prototype, written to prove the design against a real node.
+  The sidecar that ships to an exchange should be a Rust static binary next to
+  the rest of the Z3 stack, reading the log path rather than `docker.sock`, with
+  one authenticated egress.
+- Only Zebra is watched. Zaino, Zallet and lightwalletd are not.
+- Everything here is inside-out: it needs the sidecar on the box. The outside-in
+  half — a Zero-side prober that reads a node's P2P `version` handshake for
+  advertised height and user agent, and attributes blocks to pools by coinbase —
+  is designed, not built.
 - Missed-block detection for miners needs the pool's own view (which template it
   was working on); the sidecar sees `submitblock` results in the log but cannot
   know a block was *expected*. That wants a small hook on the pool side.
