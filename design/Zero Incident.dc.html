@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+html,body{margin:0;background:#0A0A0F;color:#E8E6F0;font:400 13px/1.45 'General Sans',system-ui,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+a{color:#A78BFA;text-decoration:none}a:hover{text-decoration:underline}
+button,input,textarea{font:inherit;cursor:pointer}
+</style>
+</helmet>
+<div data-screen-label="Incident detail" style="min-width:1024px;max-width:1440px;margin:0 auto;min-height:100vh;background:#0A0A0F;color:#E8E6F0">
+  <div style="height:44px;display:flex;align-items:center;gap:16px;padding:0 24px;border-bottom:1px solid rgba(160,150,200,0.08);background:#0D0D12;white-space:nowrap;overflow:hidden">
+    <div style="display:flex;align-items:baseline;gap:8px"><span style="font-weight:500;font-size:14px">Zero</span><span style="font-size:11px;color:#65636F">Shielded Labs</span></div>
+    <nav style="display:flex;gap:4px">
+      <a href="Zero%20Overview.dc.html" style="padding:4px 10px;border-radius:6px;color:#9B97A8;text-decoration:none">Overview</a>
+      <a href="Zero%20Incident.dc.html" style="padding:4px 10px;border-radius:6px;color:#E8E6F0;background:#1A1A22;text-decoration:none">Incident</a>
+      <a href="Zero%20Node.dc.html" style="padding:4px 10px;border-radius:6px;color:#9B97A8;text-decoration:none">Node</a>
+      <a href="Zero%20Sidecar.dc.html" style="padding:4px 10px;border-radius:6px;color:#9B97A8;text-decoration:none">Sidecar</a>
+      <a href="Zero%20Components.dc.html" style="padding:4px 10px;border-radius:6px;color:#9B97A8;text-decoration:none">Components</a>
+    </nav>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+      <span style="font-size:12px;color:#9B97A8">on call <span style="color:#E8E6F0">aayush</span></span>
+      <span style="display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:6px;background:rgba(239,68,68,0.16);color:#EF4444;font-size:12px"><span style="width:6px;height:6px;border-radius:50%;background:#EF4444"></span>1 critical open</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#9B97A8">{{ clock }} UTC</span>
+    </div>
+  </div>
+
+  <div style="padding:16px 24px 32px;display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#65636F"><a href="Zero%20Overview.dc.html" style="color:#9B97A8">Fleet</a><span>/</span><a href="Zero%20Node.dc.html" style="color:#9B97A8">foundry-pool-1</a><span>/</span><span style="font-family:'JetBrains Mono',monospace">inc_01j9k4</span></div>
+
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:4px;background:rgba(239,68,68,0.16);color:#EF4444;font-size:12px">critical</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#9B97A8">tip_stalled</span>
+      <span style="font-size:18px;font-weight:500;line-height:1.2">No new block for 12m 30s</span>
+      <span style="color:#65636F">on</span><a href="Zero%20Node.dc.html" style="font-weight:500;color:#E8E6F0">foundry-pool-1</a>
+      <span style="margin-left:auto;display:flex;gap:16px;font-size:12px;color:#9B97A8;font-family:'JetBrains Mono',monospace"><span>escalations <span style="color:#E8E6F0">1</span></span><span>status <span style="color:{{ stageColor }}">{{ stageLabel }}</span></span></span>
+    </div>
+
+    <div style="border:1px solid rgba(160,150,200,0.08);border-radius:8px;background:#14141A;padding:16px 20px 12px;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#9B97A8"><span>lifecycle</span><span style="font-family:'JetBrains Mono',monospace">time to detect 12m 29s · time to acknowledge 2m 29s · time to respond 7m 37s · {{ resolveMetric }}</span></div>
+      <div style="display:flex;align-items:flex-start;padding-top:8px">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:90px;flex:none">
+          <span style="width:12px;height:12px;border-radius:50%;background:#EF4444;box-sizing:border-box"></span>
+          <span style="font-size:12px">onset</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#9B97A8">11:16:04</span><span style="font-size:11px;color:#65636F;text-align:center">last block time</span>
+        </div>
+        <div style="flex:749;display:flex;flex-direction:column;align-items:center;gap:6px;margin:5px -45px 0"><span style="height:2px;width:100%;background:#EF4444"></span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#9B97A8">12m 29s</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:90px;flex:none;position:relative">
+          <span style="width:12px;height:12px;border-radius:50%;background:#EF4444;box-sizing:border-box"></span>
+          <span style="font-size:12px">paged</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#9B97A8">11:28:33</span><span style="font-size:11px;color:#65636F;text-align:center">→ aayush</span>
+        </div>
+        <div style="flex:149;display:flex;flex-direction:column;align-items:center;gap:6px;margin:5px -45px 0"><span style="height:2px;width:100%;background:{{ seg2 }}"></span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#9B97A8">2m 29s</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:90px;flex:none;position:relative">
+          <span style="width:12px;height:12px;border-radius:50%;background:{{ dot3bg }};border:2px solid {{ dot3bd }};box-sizing:border-box"></span>
+          <span style="font-size:12px">acked</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#9B97A8">{{ t3 }}</span><span style="font-size:11px;color:#65636F;text-align:center">{{ by3 }}</span>
+        </div>
+        <div style="flex:308;display:flex;flex-direction:column;align-items:center;gap:6px;margin:5px -45px 0"><span style="height:2px;width:100%;background:{{ seg3 }}"></span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#9B97A8">{{ d3 }}</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:90px;flex:none;position:relative">
+          <span style="width:12px;height:12px;border-radius:50%;background:{{ dot4bg }};border:2px solid {{ dot4bd }};box-sizing:border-box"></span>
+          <span style="font-size:12px">responded</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#9B97A8">{{ t4 }}</span><span style="font-size:11px;color:#65636F;text-align:center">{{ by4 }}</span>
+        </div>
+        <div style="flex:340;display:flex;flex-direction:column;align-items:center;gap:6px;margin:5px -45px 0"><span style="height:2px;width:100%;background:{{ seg4 }}"></span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#9B97A8">{{ d4 }}</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:90px;flex:none;position:relative">
+          <span style="width:12px;height:12px;border-radius:50%;background:{{ dot5bg }};border:2px solid {{ dot5bd }};box-sizing:border-box"></span>
+          <span style="font-size:12px">resolved</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#9B97A8">{{ t5 }}</span><span style="font-size:11px;color:#65636F;text-align:center">{{ by5 }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start">
+      <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+        <div style="border:1px solid rgba(160,150,200,0.08);border-radius:8px;background:#14141A;padding:12px 16px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <button onClick="{{ doAck }}" disabled="{{ ackDone }}" style="border:1px solid rgba(160,150,200,0.14);background:#0D0D12;color:{{ ackFg }};border-radius:6px;padding:4px 10px">{{ ackLabel }}</button>
+            <button onClick="{{ doRespond }}" disabled="{{ respDone }}" style="border:1px solid rgba(160,150,200,0.14);background:#0D0D12;color:{{ respFg }};border-radius:6px;padding:4px 10px">{{ respLabel }}</button>
+            <button onClick="{{ toggleNote }}" style="border:1px solid rgba(160,150,200,0.14);background:#0D0D12;color:#E8E6F0;border-radius:6px;padding:4px 10px">Add note</button>
+            <button onClick="{{ doClose }}" disabled="{{ closeDone }}" style="border:1px solid rgba(160,150,200,0.14);background:#0D0D12;color:{{ closeFg }};border-radius:6px;padding:4px 10px;margin-left:auto">{{ closeLabel }}</button>
+            <a href="#raw" style="font-size:12px;padding:4px 6px">raw JSON bundle ↗</a>
+          </div>
+          <sc-if value="{{ noteOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:8px">
+              <input value="{{ noteText }}" onChange="{{ setNote }}" placeholder="{{ notePlaceholder }}" style="flex:1;background:#0D0D12;border:1px solid rgba(160,150,200,0.14);border-radius:6px;color:#E8E6F0;padding:5px 10px;cursor:text">
+              <button onClick="{{ submitNote }}" style="border:1px solid rgba(160,150,200,0.14);background:#1A1A22;color:#E8E6F0;border-radius:6px;padding:4px 12px">{{ submitLabel }}</button>
+              <button onClick="{{ toggleNote }}" style="border:0;background:transparent;color:#9B97A8;padding:4px 8px">Cancel</button>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="border:1px solid rgba(160,150,200,0.08);border-radius:8px;background:#14141A;padding:12px 16px;display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:#9B97A8"><span>RPC latency · last hour</span><span style="font-family:'JetBrains Mono',monospace">now 41 ms · p95 58 ms</span></div>
+          <svg viewBox="0 0 600 80" preserveAspectRatio="none" style="width:100%;height:80px;display:block">
+            <line x1="0" y1="79.5" x2="600" y2="79.5" stroke="rgba(160,150,200,0.14)"></line>
+            <line x1="0" y1="40" x2="600" y2="40" stroke="rgba(160,150,200,0.06)"></line>
+            <polyline points="{{ rpcPts }}" fill="none" stroke="#9B97A8" stroke-width="1.2" vector-effect="non-scaling-stroke"></polyline>
+            <line x1="432" y1="0" x2="432" y2="80" stroke="#EF4444" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"></line>
+          </svg>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:#65636F;font-family:'JetBrains Mono',monospace"><span>10:45</span><span>11:00</span><span>11:15</span><span style="color:#EF4444">paged 11:28:33</span><span>11:45</span></div>
+        </div>
+
+        <div style="border:1px solid rgba(160,150,200,0.08);border-radius:8px;background:#14141A;overflow:hidden">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 16px;border-bottom:1px solid rgba(160,150,200,0.08);font-size:12px;color:#9B97A8"><span>log excerpt · last 200 lines at page time</span><span style="font-family:'JetBrains Mono',monospace;color:#65636F">node ts · received ts</span></div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:1.7;padding:8px 16px;display:grid;grid-template-columns:auto auto auto minmax(0,1fr);column-gap:14px;white-space:nowrap;overflow:hidden">
+            <span style="color:#65636F">11:16:04.212</span><span style="color:#65636F">+14ms</span><span style="color:#10B981">INFO</span><span style="overflow:hidden;text-overflow:ellipsis">{zebrad="3f1a9c2" net="Main"}: zebra_state::service: committed block height=Height(3011882) hash=00009739a1e4c0f2… transactions=41</span>
+            <span style="color:#65636F">11:16:31.870</span><span style="color:#65636F">+12ms</span><span style="color:#10B981">INFO</span><span style="overflow:hidden;text-overflow:ellipsis">{zebrad="3f1a9c2" net="Main"}: zebra_network::peer_set: peer set status ready=4 inbound=1 outbound=3</span>
+            <span style="color:#65636F">11:19:02.104</span><span style="color:#65636F">+15ms</span><span style="color:#F59E0B">WARN</span><span style="overflow:hidden;text-overflow:ellipsis">{zebrad="3f1a9c2" net="Main"}: zebra_network::peer: connection closed addr=51.15.62.4:8233 err=timeout</span>
+            <span style="color:#65636F">11:21:40.551</span><span style="color:#65636F">+13ms</span><span style="color:#F59E0B">WARN</span><span style="overflow:hidden;text-overflow:ellipsis">{zebrad="3f1a9c2" net="Main"}: zebra_network::peer: connection closed addr=176.9.1.90:8233 err=peer disconnected</span>
+            <span style="color:#65636F">11:22:00.009</span><span style="color:#65636F">+16ms</span><span style="color:#10B981">INFO</span><span style="overflow:hidden;text-overflow:ellipsis">{zebrad="3f1a9c2" net="Main"}: zebra_network::peer_set: peer set status ready=2 inbound=0 outbound=2</span>
+            <span style="color:#65636F">11:24:12.330</span><span style="color:#65636F">+15ms</span><span style="color:#10B981">INFO</span><span style="overflow:hidden;text-overflow:ellipsis">{zebrad="3f1a9c2" net="Main"}: zebrad::components::sync: extending tips: no new tips found, sleeping</span>
+            <span style="color:#65636F">11:26:12.418</span><span style="color:#65636F">+14ms</span><span style="color:#F59E0B">WARN</span><span style="overflow:hidden;text-overflow:ellipsis">{zebrad="3f1a9c2" net="Main"}: zebra_network::peer_set: peer set is below minimum peers=2 min=3</span>
+            <span style="color:#65636F">11:27:30.661</span><span style="color:#65636F">+15ms</span><span style="color:#10B981">INFO</span><span style="overflow:hidden;text-overflow:ellipsis">{zebrad="3f1a9c2" net="Main"}: zebrad::components::sync: extending tips: no new tips found, sleeping</span>
+            <span style="color:#65636F">11:28:01.002</span><span style="color:#65636F">+13ms</span><span style="color:#EF4444">ERROR</span><span style="overflow:hidden;text-overflow:ellipsis">{zebrad="3f1a9c2" net="Main"}: zebra_network::peer::handshake: handshake failed addr=94.130.11.2:8233 err=connection refused</span>
+            <span style="color:#65636F">11:28:30.117</span><span style="color:#65636F">+15ms</span><span style="color:#9B97A8">DEBUG</span><span style="overflow:hidden;text-overflow:ellipsis">{zebrad="3f1a9c2" net="Main"}: zebra_rpc::methods: getblockchaininfo blocks=3011882 estimatedheight=3011893</span>
+            <span style="color:#65636F">11:28:32.980</span><span style="color:#65636F">+14ms</span><span style="color:#F59E0B">WARN</span><span style="overflow:hidden;text-overflow:ellipsis">{zebrad="3f1a9c2" net="Main"}: zebrad::components::sync::progress: sync_percent=100.000% current_height=Height(3011882) time_since_last_state_block=749s</span>
+          </div>
+          <div style="padding:6px 16px;border-top:1px solid rgba(160,150,200,0.08);font-size:11px;color:#65636F">showing 11 of 200 · <a href="#log" style="font-size:11px">expand</a></div>
+        </div>
+
+        <sc-if value="{{ showTriage }}" hint-placeholder-val="{{ true }}">
+          <div style="border:1px dashed rgba(59,130,246,0.45);border-radius:8px;background:#14141A;padding:12px 16px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:10px"><span style="display:inline-flex;padding:1px 6px;border-radius:4px;background:rgba(59,130,246,0.16);color:#3B82F6;font-size:11px">draft</span><span style="font-size:12px;color:#9B97A8">Triage draft — written by the model at page time. Nothing here is sent until a human approves it.</span></div>
+            <div style="display:grid;grid-template-columns:130px minmax(0,1fr);row-gap:8px;column-gap:16px;font-size:12.5px">
+              <span style="color:#9B97A8">probable cause</span><span>Tip stalled with peers=2 (below min 3). Two outbound connections dropped between 11:19 and 11:22; node is likely partitioned rather than the chain being stalled — estimated height (3011893) is ahead of local tip.</span>
+              <span style="color:#9B97A8">what to check</span><span>Compare 3011882 against a public explorer or bitgo-hot-2 (3011894). Check outbound firewall / NAT on port 8233. Check <span style="font-family:'JetBrains Mono',monospace">peers.dat</span> churn in the last hour.</span>
+              <span style="color:#9B97A8">regtest repro</span><span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#9B97A8">zebrad --network regtest --initial-mainnet-peers "" ; wait 600s → sidecar fires tip_stalled with peers=0</span>
+              <span style="color:#9B97A8">draft to operator</span><span style="border-left:1px solid rgba(160,150,200,0.14);padding-left:10px;color:#9B97A8">"foundry-pool-1 has had no new block for 12 minutes while the network is at 3011894. It is holding only 2 peers, so this looks like a connectivity problem on your side rather than the chain. Can you check outbound 8233 and restart zebrad if peers don't recover?"</span>
+            </div>
+            <div style="display:flex;gap:6px"><button onClick="{{ useDraft }}" style="border:1px solid rgba(160,150,200,0.14);background:#0D0D12;color:#E8E6F0;border-radius:6px;padding:3px 10px;font-size:12px">Use as response note</button><button onClick="{{ hideTriage }}" style="border:0;background:transparent;color:#9B97A8;padding:3px 8px;font-size:12px">Discard</button></div>
+          </div>
+        </sc-if>
+
+        <div style="border:1px solid rgba(160,150,200,0.08);border-radius:8px;background:#14141A;overflow:hidden">
+          <div style="padding:8px 16px;border-bottom:1px solid rgba(160,150,200,0.08);font-size:12px;color:#9B97A8">notes &amp; audit trail</div>
+          <sc-for list="{{ trail }}" as="e" hint-placeholder-count="3">
+            <div style="display:grid;grid-template-columns:70px 90px minmax(0,1fr);gap:14px;padding:7px 16px;border-bottom:1px solid rgba(160,150,200,0.08);font-size:12.5px;align-items:baseline">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#65636F">{{ e.t }}</span>
+              <span style="color:{{ e.whoColor }}">{{ e.who }}</span>
+              <span><span style="color:#9B97A8">{{ e.verb }}</span> {{ e.text }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+        <div style="border:1px solid rgba(160,150,200,0.08);border-radius:8px;background:#14141A;overflow:hidden">
+          <div style="padding:8px 16px;border-bottom:1px solid rgba(160,150,200,0.08);font-size:12px;color:#9B97A8">evidence · from detector</div>
+          <div style="display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:16px;row-gap:5px;padding:10px 16px;font-family:'JetBrains Mono',monospace;font-size:12px">
+            <span style="color:#9B97A8">height</span><span>3011882</span>
+            <span style="color:#9B97A8">hash</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">00009739a1e4c0f2…</span>
+            <span style="color:#9B97A8">ageS</span><span style="color:#EF4444">749</span>
+            <span style="color:#9B97A8">peers</span><span style="color:#F59E0B">2</span>
+            <span style="color:#9B97A8">estimatedHeight</span><span>3011893</span>
+            <span style="color:#9B97A8">thresholdS</span><span>600</span>
+            <span style="color:#9B97A8">failures</span><span>0</span>
+            <span style="color:#9B97A8">lastError</span><span style="color:#65636F">null</span>
+          </div>
+          <div style="padding:10px 16px;border-top:1px solid rgba(160,150,200,0.08);display:flex;flex-direction:column;gap:4px">
+            <span style="font-size:11px;color:#9B97A8;letter-spacing:0.02em;white-space:nowrap">next:</span>
+            <span style="font-size:12.5px">Compare height with a public explorer or a second node. If the network has moved on, check peers and outbound connectivity; if the network is also at 3011882, this is a chain-level stall — do not restart.</span>
+          </div>
+        </div>
+
+        <div style="border:1px solid rgba(160,150,200,0.08);border-radius:8px;background:#14141A;overflow:hidden">
+          <div style="padding:8px 16px;border-bottom:1px solid rgba(160,150,200,0.08);font-size:12px;color:#9B97A8">node snapshot · at page time 11:28:33</div>
+          <div style="display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:16px;row-gap:5px;padding:10px 16px;font-family:'JetBrains Mono',monospace;font-size:12px">
+            <span style="color:#9B97A8">zebrad</span><span>v6.3.0</span>
+            <span style="color:#9B97A8">network</span><span>Mainnet</span>
+            <span style="color:#9B97A8">tip</span><span>3011882 · 12m 29s</span>
+            <span style="color:#9B97A8">peers</span><span>2</span>
+            <span style="color:#9B97A8">rpc</span><span>41 ms</span>
+            <span style="color:#9B97A8">mempool</span><span>3</span>
+            <span style="color:#9B97A8">last block</span><span>1.9 MB · 41 txs · lag 15 ms</span>
+            <span style="color:#9B97A8">sidecar</span><span>zero-sidecar 0.4.2 · foundry-zc-01</span>
+          </div>
+        </div>
+        <a id="raw" href="#raw" style="font-size:12px;font-family:'JetBrains Mono',monospace">incidents/inc_01j9k4/bundle.json ↗</a>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;initialStage&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;paged&quot;,&quot;acked&quot;,&quot;responded&quot;,&quot;resolved&quot;],&quot;default&quot;:&quot;responded&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Incident&quot;},&quot;showTriageDraft&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Incident&quot;}}">
+class Component extends DCLogic {
+  state = { stage: null, noteOpen: false, noteMode: 'note', noteText: '', tick: 0, extra: [] };
+  componentDidMount() { this.t = setInterval(() => this.setState(s => ({ tick: s.tick + 1 })), 1000); }
+  componentWillUnmount() { clearInterval(this.t); }
+  renderVals() {
+    const stage = this.state.stage || this.props.initialStage || 'responded';
+    const n = { paged: 1, acked: 2, responded: 3, resolved: 4 }[stage];
+    const acked = n >= 2, responded = n >= 3, resolved = n >= 4;
+    const hollow = { bg: 'transparent', bd: '#65636F' }, done = { bg: '#E8E6F0', bd: '#E8E6F0' };
+    const d3 = acked ? done : hollow, d4 = responded ? done : hollow, d5 = resolved ? { bg: '#10B981', bd: '#10B981' } : hollow;
+    const rnd = (i) => { const x = Math.sin(i * 12.9898) * 43758.5453; return x - Math.floor(x); };
+    const pts = []; for (let i = 0; i <= 60; i++) { const base = i > 43 ? 41 : 30 + (i > 30 ? 6 : 0); const v = base + rnd(i) * 10; pts.push((i * 10) + ',' + (80 - v * 1.1).toFixed(1)); }
+    const trail = [
+      { t: '11:28:33', who: 'sidecar', whoColor: '#9B97A8', verb: 'paged', text: 'aayush (escalation 1 of 3) · tip_stalled ageS=749' },
+      acked && { t: '11:31:02', who: 'aayush', whoColor: '#E8E6F0', verb: 'acknowledged', text: '' },
+      responded && { t: '11:36:10', who: 'aayush', whoColor: '#E8E6F0', verb: 'responded', text: '"asked Foundry to check peers"' },
+      ...this.state.extra,
+      resolved && { t: '11:41:50', who: 'sidecar', whoColor: '#9B97A8', verb: 'resolved', text: 'new block 3011883 · duration 13m 17s' },
+    ].filter(Boolean);
+    const openNote = (mode) => this.setState({ noteOpen: true, noteMode: mode, noteText: '' });
+    const stamp = () => new Date().toISOString().slice(11, 19);
+    return {
+      clock: stamp(), showTriage: this.state.triageHidden ? false : (this.props.showTriageDraft ?? true),
+      stageLabel: stage, stageColor: resolved ? '#10B981' : acked ? '#9B97A8' : '#EF4444',
+      resolveMetric: resolved ? 'time to resolve 25m 46s · duration 13m 17s' : 'unresolved',
+      seg2: '#E8E6F0', seg3: acked ? '#E8E6F0' : 'rgba(160,150,200,0.14)', seg4: responded ? '#E8E6F0' : 'rgba(160,150,200,0.14)',
+      dot3bg: d3.bg, dot3bd: d3.bd, dot4bg: d4.bg, dot4bd: d4.bd, dot5bg: d5.bg, dot5bd: d5.bd,
+      t3: acked ? '11:31:02' : '—', by3: acked ? 'aayush' : 'waiting', d3: acked ? '5m 08s' : '', t4: responded ? '11:36:10' : '—', by4: responded ? 'aayush · note' : '', d4: responded ? '5m 40s' : '',
+      t5: resolved ? '11:41:50' : '—', by5: resolved ? 'new block 3011883' : 'open',
+      ackDone: acked, ackFg: acked ? '#65636F' : '#E8E6F0', ackLabel: acked ? 'Acknowledged' : 'Acknowledge', doAck: () => this.setState({ stage: 'acked' }),
+      respDone: responded, respFg: responded ? '#65636F' : '#E8E6F0', respLabel: responded ? 'Responded' : 'Mark responded', doRespond: () => openNote('respond'),
+      closeDone: resolved, closeFg: resolved ? '#65636F' : '#E8E6F0', closeLabel: resolved ? 'Closed' : 'Close', doClose: () => openNote('close'),
+      toggleNote: () => this.setState(s => ({ noteOpen: !s.noteOpen, noteMode: 'note', noteText: '' })),
+      noteOpen: this.state.noteOpen, noteText: this.state.noteText, setNote: (e) => this.setState({ noteText: e.target.value }),
+      notePlaceholder: { note: 'Add a note to the audit trail', respond: 'What did you tell the operator?', close: 'Reason for closing' }[this.state.noteMode],
+      submitLabel: { note: 'Save note', respond: 'Mark responded', close: 'Close incident' }[this.state.noteMode],
+      submitNote: () => { const m = this.state.noteMode, txt = this.state.noteText || '(no note)'; const e = { t: stamp(), who: 'you', whoColor: '#E8E6F0', verb: m === 'note' ? 'noted' : m === 'respond' ? 'responded' : 'closed by hand', text: '"' + txt + '"' };
+        this.setState(s => ({ noteOpen: false, noteText: '', extra: [...s.extra, e], stage: m === 'respond' ? 'responded' : m === 'close' ? 'resolved' : s.stage })); },
+      useDraft: () => this.setState({ noteOpen: true, noteMode: 'respond', noteText: 'foundry-pool-1 has had no new block for 12 minutes while the network is at 3011894. It is holding only 2 peers…' }),
+      hideTriage: () => this.setState({ triageHidden: true }),
+      trail, rpcPts: pts.join(' '),
+    };
+  }
+}
+</script>
+</body>
+</html>

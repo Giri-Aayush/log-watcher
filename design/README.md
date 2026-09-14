@@ -15,5 +15,8 @@ Source of truth for the console UI, exported from the Claude Design project
   collector's `/api/*` endpoints; the mock's sample data is illustrative.
 - `support.js` — the mock runtime, kept only so the mock can be opened as-is.
 
-Screens not yet exported: `Zero Incident`, `Zero Node`, `Zero Sidecar`,
+- `Zero Incident.dc.html` — the incident detail screen (lifecycle strip, actions,
+  RPC latency around the page, log excerpt, triage draft, audit trail).
+
+Screens not yet exported: `Zero Node`, `Zero Sidecar`,
 `Zero Components`.
