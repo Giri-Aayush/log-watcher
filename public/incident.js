@@ -138,14 +138,18 @@
     }
     state.clockOffset = inc.at - Math.round((t0 + Date.now()) / 2);
     const network = isNetwork(inc);
-    const [series, open, all, page, triageStatus] = await Promise.all([
+    const [series, open, all, page, triageStatus, fleet] = await Promise.all([
       network ? [] : getJSON('/api/series/' + encodeURIComponent(inc.label) + '?window=' + seriesWindow(inc)).catch((err) => { console.error('series failed', err); return state.series; }),
       getJSON('/api/incidents?state=open').catch((err) => { console.error('open incidents failed', err); return null; }),
       network && inc.members && inc.members.length ? getJSON('/api/incidents?window=30d').catch(() => null) : null,
       inc.bundleFile && inc.bundleFile !== state.pageBundleFile ? getJSON(bundleHref(inc.bundleFile)).catch((err) => { console.error('page-time bundle failed', err); return null; }) : undefined,
       getJSON('/api/triage/status').catch(() => null),
+      network ? null : getJSON('/api/fleet').catch(() => null),
     ]);
     if (triageStatus && typeof triageStatus.available === 'boolean') state.triageAvailable = triageStatus.available;
+    // the node's own sidecar page, if it has told Zero where it is
+    const row = Array.isArray(fleet) ? fleet.find((n) => n.label === inc.label) : null;
+    state.sidecarUrl = row && row.sidecar && row.sidecar.dashboardUrl ? row.sidecar.dashboardUrl : null;
     state.inc = inc;
     state.series = Array.isArray(series) ? series : [];
     if (Array.isArray(open)) state.critOpen = open.filter((i) => !i.transient && !i.resolvedAt && !i.suppressedBy && i.severity === 'critical').length;
@@ -238,7 +242,18 @@
   function renderHead(inc) {
     const network = isNetwork(inc);
     setText('crumb-node', inc.label);
-    $('crumb-node').title = network ? '' : 'node detail: coming';
+    const nodeHref = network ? null : '/node.html?label=' + encodeURIComponent(inc.label);
+    if (nodeHref) { $('crumb-node').href = nodeHref; $('crumb-node').title = 'node detail'; } else { $('crumb-node').removeAttribute('href'); $('crumb-node').title = ''; }
+    const navSidecar = $('nav-sidecar');
+    if (navSidecar) {
+      const html = state.sidecarUrl ? '<a id="nav-sidecar" href="' + esc(state.sidecarUrl) + '" target="_blank" rel="noopener">Sidecar ↗</a>' : '<span id="nav-sidecar" class="soon" title="the node\'s sidecar has not said where its page is">Sidecar</span>';
+      if (state.rendered.navSidecar !== html) { state.rendered.navSidecar = html; navSidecar.outerHTML = html; }
+    }
+    const navNode = $('nav-node');
+    if (navNode) {
+      const html = nodeHref ? '<a id="nav-node" href="' + nodeHref + '">Node</a>' : '<span id="nav-node" class="soon" title="a network incident has no single node">Node</span>';
+      if (state.rendered.navNode !== html) { state.rendered.navNode = html; navNode.outerHTML = html; }
+    }
     setText('crumb-id', inc.id);
     setText('h-sev', inc.severity);
     $('h-sev').className = 'tag ' + esc(inc.severity);
@@ -246,7 +261,7 @@
     setText('h-title', inc.title || '—');
     setText('h-node', inc.label);
     $('h-node').className = 'node' + (network ? ' network' : '');
-    $('h-node').title = network ? '' : 'node detail: coming';
+    if (nodeHref) { $('h-node').href = nodeHref; $('h-node').title = 'node detail'; } else { $('h-node').removeAttribute('href'); $('h-node').title = ''; }
     setText('h-esc', String(inc.escalations || 0));
     const [word, cls] = statusOf(inc);
     const html = cls === 'suppressed'

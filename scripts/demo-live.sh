@@ -72,7 +72,8 @@ case "${1:-}" in
     preflight_attach() {
       command -v node >/dev/null && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 20 ] || { echo "need node >= 20"; exit 1; }
       [ -d node_modules ] || { say "installing dependencies"; npm install --no-audit --no-fund >/dev/null; }
-      for p in "$SIDECAR_PORT" "$COLLECTOR_PORT"; do port_free "$p" || { echo "port $p is in use: $(lsof -nP -iTCP:$p -sTCP:LISTEN | tail -1 | awk '{print $1, $2}')"; exit 1; }; done
+      alive sidecar || port_free "$SIDECAR_PORT" || { echo "port $SIDECAR_PORT is in use: $(lsof -nP -iTCP:$SIDECAR_PORT -sTCP:LISTEN | tail -1 | awk '{print $1, $2}')"; exit 1; }
+      alive collector || port_free "$COLLECTOR_PORT" || { echo "port $COLLECTOR_PORT is in use: $(lsof -nP -iTCP:$COLLECTOR_PORT -sTCP:LISTEN | tail -1 | awk '{print $1, $2}')"; exit 1; }
       [ -f "$DIR/zebrad.log" ] || { echo "no $DIR/zebrad.log yet — start the node first (scripts/demo-live.sh node)"; exit 1; }
       for _ in $(seq 1 20); do [ -f "$DIR/.cookie" ] && curl -s -m 3 -u "$(cat "$DIR/.cookie")" -H 'content-type: application/json' --data-binary '{"jsonrpc":"2.0","id":1,"method":"getblockcount","params":[]}' "http://127.0.0.1:$RPC_PORT/" | grep -q result && return 0; sleep 0.5; done
       echo "zebrad RPC not answering on :$RPC_PORT — is the node running?"; exit 1

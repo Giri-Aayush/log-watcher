@@ -23,7 +23,9 @@ node you started yourself, "kill" is `kill -9 $(pgrep -f 'zebrad -c')` in termin
 (unclean, so the non-finalized blocks are lost and `tip_rewound` shows) or Ctrl-C in
 terminal 1 (clean), and "revive" is running the zebrad command again in terminal 1.
 
-Tabs: **sidecar** <http://localhost:3000> and **collector** <http://localhost:4000>.
+Tabs: **sidecar** <http://localhost:3000> (the operator's page, also reachable
+from the Sidecar tab on a node's page) and **collector** <http://localhost:4000>
+(Overview → click a row for the node page, an incident for its page).
 Check once that `scripts/demo-live.sh mine 1` moves the tip. Then leave it — a
 minute later `tip_stalled` will fire on its own, which is a fine opening state.
 
@@ -55,8 +57,10 @@ alert, same bundle, on the Zero side, delivered outbound-only.
 Threshold is 1 minute here for the demo; the real default is 10 (at 75 s spacing,
 P(no block in 10 min) ≈ e⁻⁸ — it cannot page faster without paging falsely).
 
-On the collector tab, click **ack** on the incident, then **responded** and type
-what you told the operator. Those two clicks are what make the response metrics
+On the collector tab, click **Ack** on the incident, then **open →** to the
+incident page: the lifecycle strip, the evidence, the log excerpt with both
+timestamps, the latency chart with the page marked. Click **Mark responded**
+and type what you told the operator. Those two clicks are what make the response metrics
 real: the tiles at the top (time to detect / acknowledge / respond / resolve, p50
 and p95) are computed from exactly these timestamps. "Oldest unacked" is the
 number an on-call lead watches.

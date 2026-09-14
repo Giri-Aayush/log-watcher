@@ -286,3 +286,20 @@ test('an improvement is recorded on the incident and counted once it is closed',
   assert.deepEqual(a.improvements, { closed: 1, withImprovement: 1, rate: 1 });
   assert.equal(h.store.incidents.get('inc-1').improvements[0].by, 'aayush');
 });
+
+test('bundles are served from a relative data dir and never from outside it', async () => {
+  const { createCollector } = require('../src/collector');
+  const http = require('http');
+  const rel = path.relative(process.cwd(), fs.mkdtempSync(path.join(os.tmpdir(), 'lw-bundle-')));
+  const c = createCollector({ dir: rel, triage: null });
+  const srv = await new Promise((r) => { const s = http.createServer(c.app); s.listen(0, '127.0.0.1', () => r(s)); });
+  const url = (p) => `http://127.0.0.1:${srv.address().port}${p}`;
+  await fetch(url('/ingest'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ phase: 'NEW', label: 'pool-1', alert: stall(), bundle: { label: 'pool-1', logs: ['one line'] } }) });
+  const inc = c.store.incidents.get('inc-1');
+  const ok = await fetch(url('/' + inc.bundleFile));
+  assert.equal(ok.status, 200);
+  assert.deepEqual((await ok.json()).logs, ['one line']);
+  assert.equal((await fetch(url('/bundles/pool-1/nope.json'))).status, 404);
+  assert.equal((await fetch(url('/bundles/..%2F..%2Fincidents.json'))).status, 400);
+  c.stop(); srv.close();
+});

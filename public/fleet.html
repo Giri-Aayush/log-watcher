@@ -29,6 +29,8 @@ button:disabled { cursor: default; }
 .nav > a:hover { text-decoration: none; }
 .nav > .active { color: var(--fg); background: var(--surface-hover); }
 .nav > .soon { color: var(--fg-3); cursor: default; }
+tr[data-label] { cursor: pointer; }
+.inc-row a.node { color: var(--fg); font-weight: var(--fw-medium); }
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: var(--sp-3); }
 .kbd { display: inline-flex; align-items: center; padding: 2px 7px; border: 1px solid var(--border); border-radius: var(--r-control); background: var(--bg); color: var(--fg-3); font-size: var(--fs-micro); }
 .oncall { font-size: var(--fs-label); color: var(--fg-2); }
@@ -171,10 +173,9 @@ table.fleet { width: 100%; border-collapse: collapse; font-size: var(--fs-label)
     <div class="brand"><span class="name">Zero</span><span class="org">Shielded Labs</span></div>
     <nav class="nav" aria-label="sections">
       <a class="active" href="/" aria-current="page">Overview</a>
-      <span class="soon" title="coming">Incident</span>
-      <span class="soon" title="coming">Node</span>
-      <span class="soon" title="coming">Sidecar</span>
-      <span class="soon" title="coming">Components</span>
+      <span class="soon" title="open an incident from the list below">Incident</span>
+      <span class="soon" title="open a node from the fleet table">Node</span>
+      <span class="soon" title="open a node, then its sidecar">Sidecar</span>
     </nav>
     <div class="topbar-right">
       <span class="kbd">⌘K</span>

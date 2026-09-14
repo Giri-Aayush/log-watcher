@@ -250,7 +250,7 @@
           const sup = o.suppressedBy ? (netTitles.get(o.suppressedBy) || o.suppressedBy) : null;
           return '<span class="tag ' + esc(o.severity) + (sup ? ' suppressed" title="suppressed: part of ' + esc(sup) : '') + '">' + esc(o.key) + (o.acked ? ' <span class="ack">✓</span>' : '') + '</span>';
         }).join('');
-        return '<tr class="' + (quiet ? 'quiet' : '') + '" title="node detail: coming">'
+        return '<tr class="' + (quiet ? 'quiet' : '') + '" data-label="' + esc(n.label) + '" title="open node detail">'
           + '<td class="node">' + esc(n.label) + '</td>'
           + '<td><span class="state ' + esc(n.state) + '"><span class="dot"></span>' + esc(n.state) + '</span></td>'
           + (n.lastSeen ? '<td class="r seen" data-since="' + Number(n.lastSeen) + '"' + (quiet ? ' data-post=" ago"' : '') + '></td>' : '<td class="r seen none">—</td>')
@@ -283,7 +283,7 @@
         return '<div class="inc-row' + (acked ? '' : ' unacked') + '" data-id="' + esc(i.id) + '">'
           + '<span class="tag ' + esc(i.severity) + '">' + esc(i.severity) + '</span>'
           + '<span class="det" title="' + esc(i.key) + '">' + esc(i.key) + '</span>'
-          + '<span class="node' + (network ? ' network' : '') + '"' + (network ? '' : ' title="node detail: coming"') + '>' + esc(i.label) + '</span>'
+          + (network ? '<span class="node network">' + esc(i.label) + '</span>' : '<a class="node" href="/node.html?label=' + encodeURIComponent(i.label) + '">' + esc(i.label) + '</a>')
           + '<span class="title" title="' + esc(i.title) + '">' + esc(i.title) + '</span>'
           + '<span class="age' + (acked ? ' acked' : '') + '" data-since="' + Number(i.receivedAt) + '" data-pre="paged " data-post=" ago"' + (acked ? '' : ' data-late="1"') + '></span>'
           + '<span class="status' + (acked ? ' acked' : '') + '">' + esc(status) + '</span>'
@@ -370,6 +370,12 @@
     state.win = b.dataset.win;
     for (const x of $('windows').children) x.classList.toggle('active', x === b);
     refresh();
+  });
+
+  $('fleet-body').addEventListener('click', (e) => {
+    if (e.target.closest('a, button')) return;
+    const row = e.target.closest('tr[data-label]');
+    if (row) window.location.href = '/node.html?label=' + encodeURIComponent(row.dataset.label);
   });
 
   $('node-filters').addEventListener('click', (e) => {

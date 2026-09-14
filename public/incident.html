@@ -212,9 +212,8 @@ input { font: inherit; }
     <nav class="nav" aria-label="sections">
       <a href="/">Overview</a>
       <span class="active" aria-current="page">Incident</span>
-      <span class="soon" title="coming">Node</span>
-      <span class="soon" title="coming">Sidecar</span>
-      <span class="soon" title="coming">Components</span>
+      <span id="nav-node" class="soon" title="coming">Node</span>
+      <span id="nav-sidecar" class="soon" title="the node's sidecar, once it has said where its page is">Sidecar</span>
     </nav>
     <div class="topbar-right">
       <span class="kbd">⌘K</span>
@@ -225,13 +224,13 @@ input { font: inherit; }
   </header>
 
   <main class="main" id="main" hidden>
-    <div class="crumbs"><a href="/">Fleet</a><span>/</span><span class="here" id="crumb-node"></span><span>/</span><span class="num" id="crumb-id"></span></div>
+    <div class="crumbs"><a href="/">Fleet</a><span>/</span><a class="here" id="crumb-node"></a><span>/</span><span class="num" id="crumb-id"></span></div>
 
     <div class="head">
       <span class="tag" id="h-sev"></span>
       <span class="key" id="h-key"></span>
       <span class="title" id="h-title"></span>
-      <span class="on">on</span><span class="node" id="h-node"></span>
+      <span class="on">on</span><a class="node" id="h-node"></a>
       <span class="meta"><span>escalations <b id="h-esc">0</b></span><span>status <span class="status" id="h-status"></span></span></span>
     </div>
 

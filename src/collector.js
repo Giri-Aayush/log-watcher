@@ -607,7 +607,13 @@ function createCollector({ dir, quietMs = 60000, now = Date.now, publicDir = pat
     res.json(ki);
   });
   app.get('/api/versions', (req, res) => res.json(store.versions()));
-  app.get('/bundles/*', (req, res) => res.sendFile(path.join(store.dir, 'bundles', req.params[0])));
+  app.get('/bundles/*', (req, res) => {
+    // sendFile needs an absolute path, and a stored bundle path must stay inside the bundle dir
+    const root = path.resolve(store.dir, 'bundles');
+    const file = path.resolve(root, req.params[0]);
+    if (!file.startsWith(root + path.sep)) return res.status(400).json({ error: 'bad path' });
+    res.sendFile(file, (err) => { if (err) res.status(err.statusCode || 404).json({ error: 'not found' }); });
+  });
 
   app.get('/', (req, res) => res.sendFile(path.join(publicDir, 'fleet.html')));
   app.use(express.static(publicDir, { index: false })); // index.html is the sidecar's page
