@@ -57,6 +57,20 @@ Every pattern comes from a running node or from `zebrad`'s source
 (`components/sync/progress.rs`, `end_of_support.rs`); `test/fixtures.js` holds
 the verbatim lines.
 
+## The knowledge base
+
+The part that compounds. Any incident can be promoted to a **known issue**
+(`POST /api/incidents/<id>/promote`): a symptom signature — detector key,
+network, affected zebrad versions (prefix match), log substrings, evidence
+values — plus cause, fix, workaround, references, and a status (draft →
+confirmed → retired). Every new incident is matched against the signatures on
+arrival and carries its matches (`knownIssueDetails`), the analysis prompt
+gets them, and the analytics report the match rate: the share of incidents
+that arrived with a known answer. Each entry exports as Markdown
+(`/api/known-issues/<id>/export`, `?internal=1` to include which nodes), so the
+public knowledge base is a by-product of doing the support. `GET /api/versions`
+lists which nodes run which zebrad build — the upgrade-outreach list.
+
 ## Latency budget
 
 Detection happens on the node's box and the page goes straight to the sink — there
