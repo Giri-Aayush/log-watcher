@@ -3,3 +3,4 @@ bundles/
 .regtest/
 *.log
 .env
+.claude/
