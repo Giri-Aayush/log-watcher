@@ -1,0 +1,5 @@
+node_modules/
+bundles/
+.regtest/
+*.log
+.env
