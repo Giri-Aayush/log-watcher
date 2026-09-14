@@ -32,7 +32,7 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
   const triage = cfg.triage.apiKey ? makeTriage(cfg.triage) : null;
   const alerts = new AlertManager({
     cfg: { ...cfg.alerts, label: cfg.label },
-    sinks: sinks || buildSinks(cfg.sinks, { outbox, label: cfg.label }),
+    sinks: sinks || buildSinks(cfg.sinks, { outbox, label: cfg.label, share: cfg.share }),
     logRing,
     getState: () => detectors.state,
     getSidecar: sidecarInfo,
@@ -183,12 +183,24 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
       tip: s.tip,
       peers: s.peers,
       rpc: { ok: s.rpc.ok, ms: s.rpc.ms, failures: s.rpc.failures },
+      gbt: cfg.rpc.gbtPollMs > 0 ? { ok: s.gbt.ok, ms: s.gbt.ms, height: s.gbt.height, txs: s.gbt.txs } : null,
       mempool: s.mempool,
       sync: s.sync,
       logDelayMs: s.logDelayMs,
       activeAlerts: alerts.list().active.map((a) => ({ key: a.key, severity: a.severity, since: a.firstSeen })),
     };
     outbox.push(body);
+  }
+
+  async function pollGbt() {
+    counters.polls++;
+    try {
+      const { result, ms } = await rpc.getBlockTemplate();
+      detectors.onGbt({ ok: true, ms, result });
+    } catch (err) {
+      detectors.onGbt({ ok: false, ms: err.ms, error: err });
+    }
+    bus.emit('state');
   }
 
   let prevBuckets = null;
@@ -225,6 +237,10 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
     if (cfg.rpc.pollMs > 0) {
       poll();
       timers.push(setInterval(poll, cfg.rpc.pollMs));
+    }
+    if (cfg.rpc.gbtPollMs > 0) {
+      pollGbt();
+      timers.push(setInterval(pollGbt, cfg.rpc.gbtPollMs));
     }
     const beat = cfg.rpc.pollMs > 0 ? cfg.rpc.pollMs : 15000;
     timers.push(setInterval(() => detectors.tick(), Math.min(beat, 10000)));
@@ -267,7 +283,7 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
     };
   }
 
-  return { cfg, bus, logRing, detectors, alerts, rpc, outbox, source: src, ingestLine, poll, pollMetrics, start, stop, snapshot };
+  return { cfg, bus, logRing, detectors, alerts, rpc, outbox, source: src, ingestLine, poll, pollGbt, pollMetrics, start, stop, snapshot };
 }
 
 module.exports = { createPipeline };

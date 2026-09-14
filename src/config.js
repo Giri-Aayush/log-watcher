@@ -24,6 +24,11 @@ const defaults = {
     timeoutMs: 10000,
     pollMs: 15000,
     blockDetail: true, // getblock for every committed block (size / tx count / lag)
+    gbtPollMs: 0, // >0 polls getblocktemplate: the call a mining pool actually makes
+  },
+  share: {
+    logs: 'full', // what leaves the box in a page: full | summary (WARN/ERROR + last 5 lines) | none
+    host: false, // include the sidecar's hostname
   },
   metrics: {
     url: null, // e.g. http://127.0.0.1:9999 when [metrics] endpoint_addr is set
@@ -36,6 +41,7 @@ const defaults = {
     minPeers: 3,
     rpcSlowMs: 2000,
     rpcFailCount: 3,
+    gbtSlowMs: 2000,
     errorBurst: 10,
     errorWindowS: 60,
     mempoolMax: 5000,
@@ -71,10 +77,11 @@ const envMap = {
   LW_LABEL: 'label', LW_PORT: 'port', LW_SOURCE: 'source', LW_LOG_FILE: 'logFile',
   LW_CONTAINER: 'container', LW_UNIT: 'unit', LW_COMMAND: 'command', LW_REPLAY_AGE_S: 'replayAgeS',
   LW_RPC_URL: 'rpc.url', LW_RPC_COOKIE: 'rpc.cookieFile', LW_RPC_USER: 'rpc.user', LW_RPC_PASS: 'rpc.pass',
-  LW_RPC_TIMEOUT_MS: 'rpc.timeoutMs', LW_POLL_MS: 'rpc.pollMs', LW_BLOCK_DETAIL: 'rpc.blockDetail',
+  LW_RPC_TIMEOUT_MS: 'rpc.timeoutMs', LW_POLL_MS: 'rpc.pollMs', LW_BLOCK_DETAIL: 'rpc.blockDetail', LW_GBT_POLL_MS: 'rpc.gbtPollMs',
+  LW_SHARE_LOGS: 'share.logs', LW_SHARE_HOST: 'share.host',
   LW_METRICS_URL: 'metrics.url', LW_METRICS_POLL_MS: 'metrics.pollMs', LW_METRICS_FAMILY: 'metrics.family', LW_VERIFY_P99_S: 'metrics.p99WarnS',
   LW_TIP_STALL_MIN: 'thresholds.tipStallMin', LW_MIN_PEERS: 'thresholds.minPeers', LW_RPC_SLOW_MS: 'thresholds.rpcSlowMs',
-  LW_RPC_FAIL_COUNT: 'thresholds.rpcFailCount', LW_ERROR_BURST: 'thresholds.errorBurst', LW_ERROR_WINDOW_S: 'thresholds.errorWindowS',
+  LW_RPC_FAIL_COUNT: 'thresholds.rpcFailCount', LW_GBT_SLOW_MS: 'thresholds.gbtSlowMs', LW_ERROR_BURST: 'thresholds.errorBurst', LW_ERROR_WINDOW_S: 'thresholds.errorWindowS',
   LW_MEMPOOL_MAX: 'thresholds.mempoolMax', LW_BIG_BLOCK_TXS: 'thresholds.bigBlockTxs', LW_BIG_BLOCK_BYTES: 'thresholds.bigBlockBytes',
   LW_BLOCK_LAG_S: 'thresholds.blockLagS', LW_EOS_WARN_BLOCKS: 'thresholds.eosWarnBlocks',
   LW_COOLDOWN_MIN: 'alerts.cooldownMin', LW_BUNDLE_DIR: 'alerts.bundleDir', LW_BUNDLE_LOG_LINES: 'alerts.bundleLogLines', LW_HEARTBEAT: 'alerts.heartbeat', LW_TRANSIENT_COOLDOWN_S: 'alerts.transientCooldownS',

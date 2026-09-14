@@ -1,3 +1,5 @@
+const { applySharePolicy } = require('./share');
+
 // Where alerts go. Every sink takes { alert, phase, text } and posts the
 // pre-formatted text; sinks never decide what to say, only where.
 //
@@ -24,16 +26,17 @@ const consoleSink = {
 // The collector gets its messages through the outbox (ordered, retried),
 // not a bare POST: a page must not be lost because the collector was
 // restarting at the wrong moment.
-function outboxSink(outbox, label) {
+function outboxSink(outbox, label, share) {
   return {
     name: 'collector',
     send: async ({ alert, phase, text }) => {
+      const bundle = phase === 'RESOLVED' && alert.resolvedBundle ? alert.resolvedBundle : alert.bundle;
       outbox.push({
         phase,
         label,
         text,
         alert: { ...alert, bundle: undefined, resolvedBundle: undefined },
-        bundle: phase === 'RESOLVED' && alert.resolvedBundle ? alert.resolvedBundle : alert.bundle,
+        bundle: bundle ? applySharePolicy(bundle, share) : null,
       });
     },
   };
@@ -57,9 +60,9 @@ function signalSink(url, number, recipient) {
   };
 }
 
-function buildSinks(cfg, { outbox, label } = {}) {
+function buildSinks(cfg, { outbox, label, share } = {}) {
   const sinks = [consoleSink];
-  if (cfg.webhookUrl && outbox) sinks.push(outboxSink(outbox, label));
+  if (cfg.webhookUrl && outbox) sinks.push(outboxSink(outbox, label, share));
   if (cfg.discordWebhook) sinks.push(discordSink(cfg.discordWebhook));
   if (cfg.telegramToken && cfg.telegramChat) sinks.push(telegramSink(cfg.telegramToken, cfg.telegramChat));
   if (cfg.signalUrl && cfg.signalNumber) sinks.push(signalSink(cfg.signalUrl, cfg.signalNumber, cfg.signalRecipient));

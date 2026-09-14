@@ -8,6 +8,8 @@
 #   scripts/demo-live.sh mine 1    # -> RESOLVED tip_stalled
 #   scripts/demo-live.sh kill      # SIGKILL zebrad -> rpc_down within ~6s; the log goes silent, RPC does not
 #   scripts/demo-live.sh revive    # zebrad back -> startup banner -> node_restarted, RESOLVED rpc_down
+#   scripts/demo-live.sh twin      # second sidecar (:3002, label regtest-b) on the same node -> when both stall, the
+#                                  #   collector opens ONE network incident and suppresses the two per-node ones
 #   scripts/demo-live.sh testnet   # second sidecar on :3001 against the Linode testnet node over SSH
 #   scripts/demo-live.sh status | logs | down
 set -euo pipefail
@@ -36,14 +38,15 @@ preflight() {
   [ "$ok" = 1 ] || { echo "fix the above, then run again"; exit 1; }
 }
 
+# start_sidecar <name> <label> <port>
 start_sidecar() {
-  alive sidecar && return 0
-  LW_LABEL="${LW_LABEL:-regtest-$(hostname -s)}" LW_SOURCE=file LW_LOG_FILE="$DIR/zebrad.log" \
+  alive "$1" && return 0
+  LW_LABEL="$2" LW_SOURCE=file LW_LOG_FILE="$DIR/zebrad.log" \
   LW_RPC_URL="http://127.0.0.1:$RPC_PORT" LW_RPC_COOKIE="$DIR/.cookie" \
-  LW_POLL_MS=3000 LW_RPC_FAIL_COUNT=2 LW_TIP_STALL_MIN=1 LW_MIN_PEERS=0 LW_BLOCK_LAG_S=0 LW_TRANSIENT_COOLDOWN_S=15 \
-  LW_WEBHOOK_URL="http://127.0.0.1:$COLLECTOR_PORT/ingest" LW_BUNDLE_DIR="$DIR/bundles" LW_PORT="$SIDECAR_PORT" \
-  nohup node server.js > "$DIR/sidecar.out" 2>&1 &
-  echo $! > "$DIR/sidecar.pid"
+  LW_POLL_MS=3000 LW_GBT_POLL_MS=10000 LW_RPC_FAIL_COUNT=2 LW_TIP_STALL_MIN=1 LW_MIN_PEERS=0 LW_BLOCK_LAG_S=0 LW_TRANSIENT_COOLDOWN_S=15 \
+  LW_WEBHOOK_URL="http://127.0.0.1:$COLLECTOR_PORT/ingest" LW_BUNDLE_DIR="$DIR/bundles-$1" LW_PORT="$3" \
+  nohup node server.js > "$DIR/$1.out" 2>&1 &
+  echo $! > "$DIR/$1.pid"
 }
 
 case "${1:-}" in
@@ -52,7 +55,7 @@ case "${1:-}" in
     say "1/3 zebrad regtest"; scripts/regtest.sh start
     say "2/3 collector on :$COLLECTOR_PORT"
     alive collector || { COLLECTOR_PORT="$COLLECTOR_PORT" COLLECTOR_DIR="$DIR/collected" nohup node scripts/collector.js > "$DIR/collector.out" 2>&1 & echo $! > "$DIR/collector.pid"; }
-    say "3/3 sidecar on :$SIDECAR_PORT"; start_sidecar
+    say "3/3 sidecar on :$SIDECAR_PORT"; start_sidecar sidecar "${LW_LABEL:-regtest-$(hostname -s)}" "$SIDECAR_PORT"
     sleep 2
     say "dashboard  http://localhost:$SIDECAR_PORT/"
     say "collector  http://localhost:$COLLECTOR_PORT/"
@@ -62,6 +65,9 @@ case "${1:-}" in
   mine)     scripts/regtest.sh mine "${2:-1}" ;;
   kill)     kill -9 "$(cat "$DIR/zebrad.pid")" && rm -f "$DIR/zebrad.pid" && say "zebrad killed with SIGKILL — watch rpc_down" ;;
   revive)   scripts/regtest.sh start && say "zebrad back — watch the startup banner, node_restarted and RESOLVED rpc_down" ;;
+  twin)
+    start_sidecar twin "regtest-b" 3002; sleep 1
+    say "second sidecar on http://localhost:3002/ (label regtest-b). Stop mining for a minute: both page tip_stalled, the collector shows one network_tip_stalled." ;;
   testnet)
     port_free 18232 && { say "opening ssh tunnel to $TESTNET_HOST:18232"; ssh -f -N -L 18232:127.0.0.1:18232 "$TESTNET_HOST"; }
     if [ -f "$TESTNET_COOKIE" ]; then rpc_env="LW_RPC_URL=http://127.0.0.1:18232 LW_RPC_COOKIE=$TESTNET_COOKIE LW_POLL_MS=15000";
@@ -71,11 +77,11 @@ case "${1:-}" in
       nohup node server.js > "$DIR/testnet.out" 2>&1 & echo $! > "$DIR/testnet.pid"; }
     sleep 2; say "testnet sidecar  http://localhost:3001/"; command -v open >/dev/null && open "http://localhost:3001/" || true ;;
   status)
-    for p in zebrad collector sidecar testnet; do alive "$p" && echo "$p: up (pid $(cat "$DIR/$p.pid"))" || echo "$p: down"; done
+    for p in zebrad collector sidecar twin testnet; do alive "$p" && echo "$p: up (pid $(cat "$DIR/$p.pid"))" || echo "$p: down"; done
     curl -s "http://localhost:$SIDECAR_PORT/health" | head -c 400; echo ;;
   logs)     tail -n 40 -f "$DIR/sidecar.out" ;;
   down)
-    for p in testnet sidecar collector; do alive "$p" && kill "$(cat "$DIR/$p.pid")" && rm -f "$DIR/$p.pid" && echo "$p stopped"; done
+    for p in testnet twin sidecar collector; do alive "$p" && kill "$(cat "$DIR/$p.pid")" && rm -f "$DIR/$p.pid" && echo "$p stopped"; done
     scripts/regtest.sh stop ;;
   *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac

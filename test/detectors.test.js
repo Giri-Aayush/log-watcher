@@ -154,3 +154,20 @@ test('zebra stall warning maps to sync_stalled and clears on at_tip', () => {
   h.feed(lines.atTip);
   assert.equal(h.resolved[0].key, 'sync_stalled');
 });
+
+test('getblocktemplate: errors, latency and a template that is not ahead of the tip', () => {
+  const h = harness({ gbtSlowMs: 500 });
+  h.feed(committedAt(100, T0));
+  h.d.onGbt({ ok: false, ms: 3, error: { message: 'Zebra is not synced', kind: 'rpc' } });
+  assert.deepEqual(h.keys(), ['gbt_error']);
+  h.d.onGbt({ ok: true, ms: 40, result: { height: 101, transactions: [{}, {}] } });
+  assert.equal(h.resolved[0].key, 'gbt_error');
+  assert.equal(h.d.state.gbt.txs, 2);
+  h.d.onGbt({ ok: true, ms: 900, result: { height: 101, transactions: [] } });
+  assert.equal(h.raised.at(-1).key, 'gbt_slow');
+  h.d.onGbt({ ok: true, ms: 30, result: { height: 100, transactions: [] } }); // behind the tip
+  assert.equal(h.resolved.at(-1).key, 'gbt_slow');
+  assert.equal(h.raised.at(-1).key, 'gbt_stale');
+  h.d.onGbt({ ok: true, ms: 30, result: { height: 101, transactions: [] } });
+  assert.equal(h.resolved.at(-1).key, 'gbt_stale');
+});

@@ -82,6 +82,18 @@ and watch the queue flush in order — NEW, node_restarted, RESOLVED — with no
 duplicates on the fleet page. Say: pages are never lost because Zero's side was
 restarting; delivery is ordered, retried with backoff, and deduplicated.
 
+**5c. Network, not customer (optional, 2 min).** `scripts/demo-live.sh twin`
+starts a second sidecar (label `regtest-b`) on the same node. Stop mining for a
+minute: both page `tip_stalled`, and the collector shows **one** open incident,
+`tip stalled on 2 of 2 Regtest nodes`, with the two per-node ones suppressed
+under it. Say: three exchanges stalling together is the chain, not three
+customers; the on-call gets one page and a different message to send. `mine 1`
+resolves it.
+
+The `getblocktemplate` card on the sidecar dashboard is on in the demo
+(`LW_GBT_POLL_MS=10000`): that is the call a pool makes, so its latency is the
+pool's experience rather than a proxy for it.
+
 **6. Real network (optional, 1 min).**
 ```bash
 scripts/demo-live.sh testnet     # second sidecar on :3001, Linode testnet node over SSH

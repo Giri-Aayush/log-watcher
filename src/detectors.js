@@ -34,6 +34,7 @@ class Detectors extends EventEmitter {
       rpc: { ok: null, ms: null, failures: 0, lastError: null, at: null, history: [], firstFailureAt: null },
       peerSummary: null,
       peersLowSince: null,
+      gbt: { ok: null, ms: null, height: null, txs: null, error: null, at: null, firstFailureAt: null },
       logDelayMs: null,
       node: { version: null, network: null, build: null, subversion: null, errors: null },
       haltHeight: null,
@@ -282,6 +283,48 @@ class Detectors extends EventEmitter {
     }
 
     this.checkEndOfSupport();
+  }
+
+  // getblocktemplate is what a pool calls, so its latency and freshness are
+  // the pool's experience, not a proxy for it. sample: { ok, ms, result, error }
+  onGbt(sample) {
+    const now = this.now();
+    const g = this.state.gbt;
+    g.at = now;
+    g.ms = sample.ms;
+    if (!sample.ok) {
+      if (g.ok !== false) g.firstFailureAt = now;
+      g.ok = false;
+      g.error = sample.error.message;
+      this.raise('gbt_error', 'critical', 'getblocktemplate is failing',
+        `${sample.error.message}. A pool pointed at this node cannot get work.`,
+        { error: sample.error.message, kind: sample.error.kind, ms: sample.ms },
+        { onsetAt: g.firstFailureAt, suggest: 'Is the node synced (getblockchaininfo)? Is mining.miner_address set in zebrad.toml? Zebra refuses templates while it is not at the tip.' });
+      return;
+    }
+    if (g.ok === false) this.resolve('gbt_error', `getblocktemplate answering again (${sample.ms}ms)`);
+    g.ok = true;
+    g.error = null;
+    g.height = sample.result.height;
+    g.txs = Array.isArray(sample.result.transactions) ? sample.result.transactions.length : null;
+
+    if (sample.ms > this.t.gbtSlowMs) {
+      this.raise('gbt_slow', 'warning', `getblocktemplate took ${sample.ms}ms`,
+        `Threshold ${this.t.gbtSlowMs}ms. Every ms here is time the pool's miners work on a stale template; past the pool's timeout they miss the block entirely.`,
+        { ms: sample.ms, thresholdMs: this.t.gbtSlowMs, txs: g.txs, height: g.height }, { onsetAt: now - sample.ms });
+    } else {
+      this.resolve('gbt_slow', `getblocktemplate ${sample.ms}ms`);
+    }
+
+    // The template builds on the node's tip, so its height should be tip + 1.
+    const tip = this.state.tip.height;
+    if (tip != null && g.height != null && g.height <= tip) {
+      this.raise('gbt_stale', 'warning', `Template height ${g.height} is not ahead of tip ${tip}`,
+        'The node is handing out work for a block that is already mined. Miners on this node are wasting hashrate.',
+        { templateHeight: g.height, tip }, { onsetAt: now });
+    } else {
+      this.resolve('gbt_stale', `template ${g.height} on tip ${tip}`);
+    }
   }
 
   // Result of getblock(hash, 1) for a block we just saw committed.

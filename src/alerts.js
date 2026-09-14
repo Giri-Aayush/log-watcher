@@ -129,6 +129,7 @@ class AlertManager extends EventEmitter {
       peerSummary: state.peerSummary || null,
       mempool: state.mempool,
       rpc: state.rpc,
+      gbt: state.gbt && state.gbt.at ? state.gbt : null,
       lastBlock: state.lastBlock || null,
       logDelayMs: state.logDelayMs ?? null,
       evidence: alert.evidence,

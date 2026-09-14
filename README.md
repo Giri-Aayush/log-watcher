@@ -28,6 +28,9 @@ zebrad ──log (file / docker / journald)──▶ parse ──▶ events ─�
 | `sync_stalled` | log | Zebra's own `chain updates have stalled` / `initial sync is very slow` | — |
 | `rpc_down` | RPC | N consecutive `getblockchaininfo` failures | 3 |
 | `rpc_slow` | RPC | `getblockchaininfo` round-trip above threshold | 2000 ms |
+| `gbt_slow` | RPC | `getblocktemplate` — the call a pool makes — above threshold (`LW_GBT_POLL_MS` > 0) | 2000 ms |
+| `gbt_error` | RPC | `getblocktemplate` failing (not synced, no miner address) | — |
+| `gbt_stale` | RPC | the template's height is not ahead of the tip: miners get work for a block already mined | — |
 | `peers_low` | RPC | fewer than N peers on two polls (critical at zero) | 3 |
 | `mempool_high` | RPC | mempool above N transactions | 5000 |
 | `large_block` | RPC | a committed block above N txs or bytes | 1000 / 1.5 MB |
@@ -40,6 +43,11 @@ zebrad ──log (file / docker / journald)──▶ parse ──▶ events ─�
 | `node_restarted` | log | the startup banner appeared | — |
 | `version_changed` | RPC | `getinfo.build` changed | — |
 | `node_reported_error` | RPC | `getinfo.errors` changed (works with no log access at all) | — |
+
+On the collector, a critical `tip_stalled` / `sync_stalled` on at least half the
+nodes of one network (minimum two) becomes a single `network_<key>` incident;
+the per-node ones are kept but suppressed until the fleet drops below the
+threshold. Three exchanges stalling together is the chain, not three customers.
 
 Stateful alerts raise once, re-notify after a cooldown (30 min) or on escalation,
 and send a RESOLVED message when the condition clears. Moments (a restart, one big
@@ -96,6 +104,12 @@ The page itself is one HTTP POST to a loopback Signal bridge: sub-second.
   collector-clock. Each node's skew is shown on the fleet page.
 - **Each alert carries a `next:` line** — the first three things to check, written
   for the engineer on the rotation, not for the operator.
+- **What leaves the box is a setting.** The local bundle file always has
+  everything; the page that goes to the collector is filtered at the export
+  boundary: `LW_SHARE_LOGS=full|summary|none` (summary = WARN/ERROR lines plus
+  the last five), and the hostname is not sent unless `LW_SHARE_HOST=true`. Zebra
+  itself already redacts peer addresses in its log. Every exported bundle states
+  the policy it was produced under.
 - **A human sends every message to an operator.** With `ANTHROPIC_API_KEY` set,
   each non-info alert gets a first-pass triage draft (probable cause, what to
   check, a regtest repro sketch, a message to the operator) attached in the
@@ -197,6 +211,8 @@ Defaults → `--config file.json` ([config.example.json](config.example.json)) �
 (`LW_TIP_STALL_MIN`, `LW_MIN_PEERS`, `LW_RPC_SLOW_MS`, …); see
 [src/config.js](src/config.js) for the full list. `LW_METRICS_URL` enables the
 Prometheus scrape when `[metrics] endpoint_addr` is set in `zebrad.toml`.
+`LW_GBT_POLL_MS=30000` turns on the `getblocktemplate` probe for pool nodes (the
+node needs `mining.miner_address` set, as a pool's does).
 
 ## Tests
 

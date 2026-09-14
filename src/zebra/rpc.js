@@ -89,6 +89,7 @@ class ZebraRpc {
   getPeerInfo() { return this.call('getpeerinfo'); }
   getMempoolInfo() { return this.call('getmempoolinfo'); }
   getBlock(hashOrHeight, verbosity = 1) { return this.call('getblock', [String(hashOrHeight), verbosity]); }
+  getBlockTemplate() { return this.call('getblocktemplate', [{ mode: 'template' }]); }
 }
 
 module.exports = { ZebraRpc, RpcError };

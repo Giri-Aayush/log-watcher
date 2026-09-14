@@ -133,3 +133,49 @@ test('stats: percentiles over an empty and a small set', () => {
   assert.deepEqual(stats([]), { count: 0, mean: null, p50: null, p95: null, max: null });
   assert.deepEqual(stats([5, 1, 3]), { count: 3, mean: 3, p50: 3, p95: 5, max: 5 });
 });
+
+test('the same stall on most nodes of a network becomes one network incident; members are suppressed until it clears', () => {
+  const h = harness();
+  const beat = (label, seq) => h.store.ingest({ phase: 'HEARTBEAT', label, seq, sentAt: h.now(), sidecar: { startedAt: 1 }, at: h.now(), node: { build: 'v6.3.0', network: 'Mainnet' }, tip: { height: 100, at: h.now() }, rpc: { ok: true, ms: 5 }, activeAlerts: [] });
+  const stallOn = (label, seq, id) => h.store.ingest({ phase: 'NEW', label, seq, sentAt: h.now(), sidecar: { startedAt: 1 }, alert: { ...stall(id), firstSeen: h.now() }, bundle: { label, logs: [] } });
+  const clearOn = (label, seq, id) => h.store.ingest({ phase: 'RESOLVED', label, seq, sentAt: h.now(), sidecar: { startedAt: 1 }, alert: { ...stall(id), resolved: { at: h.now(), detail: 'block' } }, bundle: { label, logs: [] } });
+  beat('a', 1); beat('b', 1); beat('c', 1);
+
+  stallOn('a', 2, 'a-1');
+  assert.equal(h.store.analytics().totals.open, 1); // one node: an ordinary incident
+  stallOn('b', 2, 'b-1');
+  const a = h.store.analytics();
+  assert.equal(a.totals.open, 1, 'two of three stalled: one network incident, not two');
+  assert.equal(a.totals.suppressed, 2);
+  const net = h.store.openIncidents()[0];
+  assert.equal(net.key, 'network_tip_stalled');
+  assert.equal(net.label, 'network:Mainnet');
+  assert.deepEqual(net.evidence.nodes, ['a', 'b']);
+  assert.equal(net.onsetAt, T0 - 10 * 60000); // earliest member onset
+  assert.equal(h.store.incidents.get('a-1').suppressedBy, net.id);
+  assert.equal(h.store.fleet().find((n) => n.label === 'a').state, 'degraded'); // not critical: the network is the problem
+  assert.equal(h.store.listIncidents({ state: 'suppressed' }).length, 2);
+
+  h.advance(60000);
+  clearOn('b', 3, 'b-1');
+  assert.equal(h.store.incidents.get(net.id).resolvedAt, h.now(), 'one of three left: below threshold, network incident resolves');
+  assert.equal(h.store.incidents.get('a-1').suppressedBy, null, 'the remaining member is an ordinary incident again');
+  assert.equal(h.store.analytics().totals.open, 1);
+  assert.equal(h.store.openIncidents()[0].id, 'a-1');
+});
+
+test('correlation ignores other keys and other networks', () => {
+  const h = harness();
+  const beat = (label, seq, network) => h.store.ingest({ phase: 'HEARTBEAT', label, seq, sentAt: h.now(), sidecar: { startedAt: 1 }, at: h.now(), node: { network }, tip: { height: 1, at: h.now() }, rpc: { ok: true, ms: 5 }, activeAlerts: [] });
+  beat('m1', 1, 'Mainnet'); beat('m2', 1, 'Mainnet'); beat('t1', 1, 'Testnet');
+  const on = (label, seq, id, key) => h.store.ingest({ phase: 'NEW', label, seq, sentAt: h.now(), sidecar: { startedAt: 1 }, alert: { ...stall(id), key, firstSeen: h.now() }, bundle: { label, logs: [] } });
+  on('m1', 2, 'm1-1', 'tip_stalled');
+  on('t1', 2, 't1-1', 'tip_stalled'); // different network
+  on('m2', 2, 'm2-1', 'peers_low');   // different key
+  assert.equal(h.store.analytics().totals.open, 3);
+  assert.equal(h.store.analytics().totals.suppressed, 0);
+  // warnings never correlate: regtest's "initial sync is very slow" is not a network event
+  const warn = (label, seq, id) => h.store.ingest({ phase: 'NEW', label, seq, sentAt: h.now(), sidecar: { startedAt: 1 }, alert: { ...stall(id), key: 'sync_stalled', severity: 'warning', firstSeen: h.now() }, bundle: { label, logs: [] } });
+  warn('m1', 3, 'm1-2'); warn('m2', 3, 'm2-2');
+  assert.equal(h.store.analytics().totals.suppressed, 0);
+});

@@ -82,7 +82,7 @@ class Store {
   node(label) {
     let n = this.nodes.get(label);
     if (!n) {
-      n = { label, firstSeen: this.now(), lastSeen: 0, lastSeq: 0, sidecarStartedAt: null, skewMs: null, heartbeat: null, quiet: false };
+      n = { label, firstSeen: this.now(), lastSeen: 0, lastSeq: 0, sidecarStartedAt: null, skewMs: null, network: null, heartbeat: null, quiet: false };
       this.nodes.set(label, n);
     }
     return n;
@@ -117,6 +117,7 @@ class Store {
 
   heartbeat(n, msg) {
     n.heartbeat = msg;
+    if (msg.node && msg.node.network) n.network = msg.node.network;
     const sample = {
       at: this.now(),
       tip: msg.tip ? msg.tip.height : null,
@@ -175,9 +176,66 @@ class Store {
       if (msg.phase === 'NEW' || !inc.bundleFile) inc.bundleFile = path.relative(this.dir, file);
       inc.latestBundleFile = path.relative(this.dir, file);
     }
+    if (msg.bundle && msg.bundle.node && msg.bundle.node.network) n.network = msg.bundle.node.network;
+    this.correlate(inc.key, n.network);
     this.save();
     this.emit('incident', inc);
     return inc;
+  }
+
+  // ---- fleet correlation -------------------------------------------------
+  //
+  // If most nodes on a network report the same thing at the same time, it is
+  // the network, not the customers. The per-node incidents stay on record but
+  // are marked suppressed (not open, not unacknowledged, not paged again),
+  // and one incident for the network is opened in their place. When enough
+  // of them clear, the network incident resolves and any still-open members
+  // become ordinary incidents again.
+
+  static get CORRELATED_KEYS() { return ['tip_stalled', 'sync_stalled']; }
+
+  correlate(key, network) {
+    if (!Store.CORRELATED_KEYS.includes(key) || !network) return;
+    const nodes = [...this.nodes.values()].filter((n) => n.network === network);
+    // Only critical per-node stalls are evidence of a network event. Zebra's
+    // "initial sync is very slow" warning, for one, fires on every regtest
+    // node forever and says nothing about the network.
+    const affected = [...this.incidents.values()].filter((i) => i.key === key && i.severity === 'critical' && !i.resolvedAt && !i.transient && this.nodes.get(i.label) && this.nodes.get(i.label).network === network);
+    const affectedLabels = new Set(affected.map((i) => i.label));
+    const netId = `network-${network}-${key}`;
+    let net = [...this.incidents.values()].find((i) => i.correlationId === netId && !i.resolvedAt);
+    const enough = nodes.length >= 2 && affectedLabels.size >= 2 && affectedLabels.size / nodes.length >= 0.5;
+    const now = this.now();
+
+    if (enough) {
+      if (!net) {
+        net = {
+          id: `${netId}-${now}`, correlationId: netId, label: `network:${network}`, key: `network_${key}`, severity: 'critical',
+          title: '', detail: '', evidence: { key, network, nodes: [] }, suggest: 'Check a public explorer and the other Zero nodes before contacting any customer: if the chain itself has stopped, the message to operators is different.',
+          transient: false, onsetAt: Math.min(...affected.map((i) => i.onsetAt)), pagedAt: now, receivedAt: now,
+          ackedAt: null, ackedBy: null, respondedAt: null, respondedBy: null, resolvedAt: null, resolvedDetail: null, closedBy: null,
+          escalations: 0, renotified: 0, notes: [], updates: [{ phase: 'NEW', at: now }], bundleFile: null, members: [],
+        };
+        this.incidents.set(net.id, net);
+      }
+      net.members = affected.map((i) => i.id);
+      net.evidence = { key, network, nodes: [...affectedLabels].sort(), of: nodes.length };
+      net.title = `${key.replace('_', ' ')} on ${affectedLabels.size} of ${nodes.length} ${network} nodes`;
+      net.detail = `${[...affectedLabels].sort().join(', ')} report ${key} together. That is the network (or Zero's view of it), not ${affectedLabels.size} separate customer problems.`;
+      for (const i of affected) {
+        if (!i.suppressedBy) { i.suppressedBy = net.id; i.updates.push({ phase: 'SUPPRESSED', at: now, by: net.id }); }
+      }
+      this.emit('incident', net);
+    } else if (net) {
+      net.resolvedAt = now;
+      net.resolvedDetail = `${affectedLabels.size} of ${nodes.length} nodes still affected; below the correlation threshold`;
+      net.updates.push({ phase: 'RESOLVED', at: now });
+      for (const id of net.members) {
+        const i = this.incidents.get(id);
+        if (i && i.suppressedBy === net.id) { i.suppressedBy = null; i.updates.push({ phase: 'UNSUPPRESSED', at: now }); }
+      }
+      this.emit('incident', net);
+    }
   }
 
   act(id, action, { by = 'unknown', text = null } = {}) {
@@ -221,27 +279,29 @@ class Store {
   fleet() {
     const now = this.now();
     return [...this.nodes.values()].map((n) => {
-      const open = this.openIncidents().filter((i) => i.label === n.label);
+      const open = [...this.incidents.values()].filter((i) => !i.resolvedAt && !i.transient && i.label === n.label);
       const h = n.heartbeat || {};
-      const state = n.quiet ? 'quiet' : open.some((i) => i.severity === 'critical') ? 'critical' : open.length ? 'degraded' : 'ok';
+      const own = open.filter((i) => !i.suppressedBy);
+      const state = n.quiet ? 'quiet' : own.some((i) => i.severity === 'critical') ? 'critical' : own.length ? 'degraded' : open.length ? 'degraded' : 'ok';
       return {
         label: n.label, state, quiet: n.quiet, lastSeen: n.lastSeen, silentS: n.lastSeen ? Math.round((now - n.lastSeen) / 1000) : null, skewMs: n.skewMs,
         node: h.node || null, tip: h.tip || null, tipAgeS: h.tip && h.tip.at ? Math.round((h.at - h.tip.at) / 1000) : null,
         peers: h.peers ?? null, rpc: h.rpc || null, mempool: h.mempool || null, sync: h.sync || null, logDelayMs: h.logDelayMs ?? null,
-        sidecar: h.sidecar || null, open: open.map((i) => ({ id: i.id, key: i.key, severity: i.severity, since: i.pagedAt, acked: !!i.ackedAt })),
+        network: n.network, sidecar: h.sidecar || null,
+        open: open.map((i) => ({ id: i.id, key: i.key, severity: i.severity, since: i.pagedAt, acked: !!i.ackedAt, suppressedBy: i.suppressedBy || null })),
       };
     });
   }
 
   openIncidents() {
-    return [...this.incidents.values()].filter((i) => !i.resolvedAt).sort((a, b) => a.pagedAt - b.pagedAt);
+    return [...this.incidents.values()].filter((i) => !i.resolvedAt && !i.suppressedBy).sort((a, b) => a.pagedAt - b.pagedAt);
   }
 
   listIncidents({ windowMs = WINDOWS['24h'], label = null, state = 'all' } = {}) {
     const since = this.now() - windowMs;
     return [...this.incidents.values()]
       .filter((i) => (i.pagedAt >= since || !i.resolvedAt) && (!label || i.label === label))
-      .filter((i) => state === 'all' || (state === 'open' ? !i.resolvedAt : !!i.resolvedAt))
+      .filter((i) => state === 'all' || (state === 'open' ? !i.resolvedAt && !i.suppressedBy : state === 'suppressed' ? !i.resolvedAt && !!i.suppressedBy : !!i.resolvedAt))
       .sort((a, b) => b.pagedAt - a.pagedAt);
   }
 
@@ -251,7 +311,8 @@ class Store {
     const all = [...this.incidents.values()].filter((i) => i.pagedAt >= since);
     const incidents = all.filter((i) => !i.transient);
     const events = all.filter((i) => i.transient);
-    const open = incidents.filter((i) => !i.resolvedAt);
+    const open = incidents.filter((i) => !i.resolvedAt && !i.suppressedBy);
+    const suppressed = incidents.filter((i) => !i.resolvedAt && i.suppressedBy);
     const count = (arr, key) => arr.reduce((m, i) => { m[i[key]] = (m[i[key]] || 0) + 1; return m; }, {});
 
     // detect and resolve are sidecar-clock to sidecar-clock; ack and respond
@@ -276,7 +337,7 @@ class Store {
       const mine = incidents.filter((i) => i.label === n.label);
       const known = Math.min(windowMs, now - n.firstSeen);
       let criticalMs = 0;
-      for (const i of mine.filter((x) => x.severity === 'critical')) {
+      for (const i of mine.filter((x) => x.severity === 'critical' && !x.suppressedBy)) {
         criticalMs += Math.max(0, (i.resolvedAt || now) - Math.max(i.pagedAt, since));
       }
       return {
@@ -293,7 +354,7 @@ class Store {
       window: windowMs, at: now,
       availability: knownMs > 0 ? Math.max(0, 1 - criticalMs / knownMs) : null,
       delivery: stats(all.map((i) => i.receivedAt - i.pagedAt)), // page -> here, includes skew
-      totals: { incidents: incidents.length, events: events.length, open: open.length, unacked: unacked.length, nodes: this.nodes.size, quietNodes: [...this.nodes.values()].filter((n) => n.quiet).length },
+      totals: { incidents: incidents.length, events: events.length, open: open.length, unacked: unacked.length, suppressed: suppressed.length, nodes: this.nodes.size, quietNodes: [...this.nodes.values()].filter((n) => n.quiet).length },
       bySeverity: count(incidents, 'severity'), byKey: count(incidents, 'key'), byNode: count(incidents, 'label'),
       latency: { detect, ack, respond, resolve, duration },
       oldestUnackedS: unacked.length ? Math.round((now - unacked[0].receivedAt) / 1000) : null,

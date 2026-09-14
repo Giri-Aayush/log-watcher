@@ -32,6 +32,7 @@
     <div class="card"><div class="k">last block</div><div class="v" id="block">–</div><div class="s" id="block-sub"></div></div>
     <div class="card"><div class="k">sync</div><div class="v" id="sync">–</div><div class="s" id="sync-sub"></div></div>
     <div class="card"><div class="k">warn / error</div><div class="v" id="warns">–</div><div class="s" id="warns-sub"></div></div>
+    <div class="card" id="gbt-card" hidden><div class="k">getblocktemplate</div><div class="v" id="gbt">–</div><div class="s" id="gbt-sub"></div></div>
   </section>
 
   <section class="panel">
@@ -116,6 +117,13 @@ function renderState() {
   $('warns').textContent = (l.warnCount || 0) + ' / ' + (l.errorCount || 0);
   $('warns-sub').textContent = l.lastWarnError ? l.lastWarnError.message.slice(0, 60) : 'since start';
   if (state.haltHeight) $('node-sub').textContent += ` · halts at ${state.haltHeight}`;
+  const g = state.gbt;
+  $('gbt-card').hidden = !(g && g.at);
+  if (g && g.at) {
+    $('gbt').textContent = g.ok === false ? 'FAILING' : g.ms + ' ms';
+    $('gbt').className = 'v' + (g.ok === false ? ' bad' : g.ms > thresholds.gbtSlowMs ? ' warn' : '');
+    $('gbt-sub').textContent = g.ok === false ? (g.error || '').slice(0, 60) : `template h${g.height} · ${g.txs} txs · the call a pool makes`;
+  }
 
   const crit = active.some((a) => a.severity === 'critical');
   $('status').textContent = crit ? 'critical' : active.length ? 'degraded' : r.ok === false ? 'rpc down' : 'ok';
