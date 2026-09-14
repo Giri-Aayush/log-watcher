@@ -357,6 +357,7 @@ class Store {
     const criticalMs = perNode.reduce((a, n) => a + n.criticalMs, 0);
     return {
       window: windowMs, at: now,
+      quietMs: this.quietMs, // how long without a heartbeat before a node is quiet; the node page shows it beside the sidecar's thresholds
       availability: knownMs > 0 ? Math.max(0, 1 - criticalMs / knownMs) : null,
       delivery: stats(all.map((i) => i.receivedAt - i.pagedAt)), // page -> here, includes skew
       totals: { incidents: incidents.length, events: events.length, open: open.length, unacked: unacked.length, suppressed: suppressed.length, nodes: this.nodes.size, quietNodes: [...this.nodes.values()].filter((n) => n.quiet).length },

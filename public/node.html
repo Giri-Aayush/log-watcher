@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Zero · Node</title>
+<link rel="stylesheet" href="zero-tokens.css">
+<style>
+/* Node detail screen. Layout and sizes follow design/Zero Node.dc.html; the
+   top bar, state pill, tags and window selector are the Overview's rules
+   (fleet.html) copied here so the two pages do not depend on each other.
+   Every color is a token from zero-tokens.css except --quiet-fg, the lighter
+   quiet text the mocks use because --quiet is too dark on --quiet-soft. */
+:root { --quiet-fg: #C4797D; }
+
+[hidden] { display: none !important; }
+button { font: inherit; cursor: pointer; }
+
+.page { min-width: var(--page-min); max-width: var(--page-max); margin: 0 auto; min-height: 100vh; background: var(--bg); color: var(--fg); }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* top bar */
+.topbar { height: var(--bar-h); display: flex; align-items: center; gap: var(--sp-4); padding: 0 var(--gutter); border-bottom: 1px solid var(--border); background: var(--bg-elevated); white-space: nowrap; overflow: hidden; }
+.brand { display: flex; align-items: baseline; gap: var(--sp-2); }
+.brand .name { font-weight: var(--fw-medium); font-size: 14px; }
+.brand .org { font-size: var(--fs-micro); color: var(--fg-3); }
+.nav { display: flex; gap: var(--sp-1); }
+.nav > * { padding: 4px 10px; border-radius: var(--r-control); color: var(--fg-2); text-decoration: none; }
+.nav > a:hover { text-decoration: none; }
+.nav > .active { color: var(--fg); background: var(--surface-hover); }
+.nav > .soon { color: var(--fg-3); cursor: default; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: var(--sp-3); }
+.oncall { font-size: var(--fs-label); color: var(--fg-2); }
+.oncall b { font-weight: var(--fw-regular); color: var(--fg); cursor: pointer; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: var(--r-control); font-size: var(--fs-label); }
+.pill.crit { background: var(--crit-soft); color: var(--crit); }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.clock { font-family: var(--font-mono); font-size: var(--fs-label); color: var(--fg-2); }
+
+/* page body */
+.main { padding: var(--sp-4) var(--gutter) var(--sp-8); display: flex; flex-direction: column; gap: var(--sp-4); }
+.node { display: flex; flex-direction: column; gap: var(--sp-4); }
+.crumbs { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-label); color: var(--fg-3); }
+.crumbs a { color: var(--fg-2); }
+.node-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; white-space: nowrap; }
+.node-head .h-title { font-size: 18px; font-weight: var(--fw-medium); line-height: 1.2; }
+.meta { font-family: var(--font-mono); font-size: var(--fs-label); color: var(--fg-2); display: flex; gap: 14px; }
+.meta b { font-weight: var(--fw-regular); color: var(--fg); }
+.meta b.quiet { color: var(--quiet-fg); }
+.head-right { margin-left: auto; display: flex; align-items: center; gap: var(--sp-3); }
+.live { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-micro); color: var(--fg-3); }
+.live .dot { color: var(--ok); }
+.live.down .dot { color: var(--crit); }
+.seg { display: flex; border: 1px solid var(--border); border-radius: var(--r-control); overflow: hidden; background: var(--bg-elevated); }
+.seg button { border: 0; padding: 3px 10px; font-size: var(--fs-label); font-family: var(--font-mono); background: transparent; color: var(--fg-2); transition: background var(--dur-micro) var(--ease), color var(--dur-micro) var(--ease); }
+.seg button:hover { color: var(--fg); }
+.seg button.active { background: var(--surface-hover); color: var(--fg); }
+
+.state { display: inline-flex; align-items: center; gap: 6px; padding: 1px 7px; border-radius: var(--r-control); font-size: var(--fs-label); font-family: var(--font-sans); }
+.state.ok { background: var(--ok-soft); color: var(--ok); }
+.state.degraded { background: var(--warn-soft); color: var(--warn); }
+.state.critical { background: var(--crit-soft); color: var(--crit); }
+.state.quiet { background: var(--quiet-soft); color: var(--quiet-fg); }
+.state.quiet .dot { background: transparent; border: 1px solid currentColor; box-sizing: border-box; }
+
+/* not found / no label */
+.gone { padding: var(--sp-10) 0; color: var(--fg-2); font-size: var(--fs-body); display: flex; flex-direction: column; gap: var(--sp-2); }
+.gone .mono { color: var(--fg); }
+
+/* the four series charts */
+.charts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--r-card); overflow: hidden; }
+.ct { background: var(--surface); padding: 10px 14px 8px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ct-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-2); }
+.ct-head .k { font-size: var(--fs-micro); color: var(--fg-2); }
+.ct-head .v { font-family: var(--font-mono); font-size: var(--fs-label); white-space: nowrap; }
+.ct-head .v.warn { color: var(--warn); }
+.ct-head .v.crit { color: var(--crit); }
+.ct-head .v.none { color: var(--fg-3); }
+.ct svg { width: 100%; height: 70px; display: block; }
+.ct .base { stroke: var(--border-strong); }
+.ct .line { fill: none; stroke: var(--fg-2); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.ct .line.tail { stroke: var(--crit); stroke-width: 1.4; }
+.ct .pt { fill: none; stroke: var(--fg-2); stroke-width: 3; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.ct .pt.tail { stroke: var(--crit); }
+.ct .thresh { stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; opacity: .7; }
+.ct .thresh.crit { stroke: var(--crit); }
+.ct .thresh.warn { stroke: var(--warn); }
+.ct .fail { stroke: var(--crit); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.ct .empty { height: 70px; display: flex; align-items: center; justify-content: center; font-size: var(--fs-micro); color: var(--fg-3); border-bottom: 1px solid var(--border-strong); box-sizing: border-box; }
+.ct-foot { display: flex; justify-content: space-between; font-size: var(--fs-micro); color: var(--fg-3); font-family: var(--font-mono); white-space: nowrap; gap: var(--sp-2); }
+.ct-foot .mark { color: var(--crit); }
+
+/* two columns; under 1200px the history table needs the full width (nine
+   columns beside a 340px panel do not fit at 1024), so the two side panels
+   drop below it, side by side */
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--sp-4); align-items: start; }
+.col { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+@media (max-width: 1199px) {
+  .cols { grid-template-columns: minmax(0, 1fr); }
+  .col.side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.card { border: 1px solid var(--border); border-radius: var(--r-card); background: var(--surface); overflow: hidden; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: 8px 14px; border-bottom: 1px solid var(--border); font-size: var(--fs-label); color: var(--fg-2); }
+.card-head .count { font-size: var(--fs-micro); color: var(--fg-3); font-family: var(--font-mono); white-space: nowrap; }
+
+/* log lag */
+.lag { padding: 8px 14px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; }
+.lag .k { font-size: var(--fs-micro); color: var(--fg-2); white-space: nowrap; }
+.lag svg { width: 100%; height: 24px; display: block; }
+.lag .line { fill: none; stroke: var(--fg-2); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.lag .pt { fill: none; stroke: var(--fg-2); stroke-width: 3; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.lag .v { font-family: var(--font-mono); font-size: var(--fs-label); white-space: nowrap; }
+.lag .v span { color: var(--fg-3); }
+
+/* incident history */
+.hist-wrap { overflow-x: auto; }
+table.hist { width: 100%; border-collapse: collapse; font-size: var(--fs-label); }
+.hist thead tr { background: var(--bg-elevated); color: var(--fg-2); font-size: var(--fs-micro); text-align: left; }
+.hist th { padding: 6px 10px; font-weight: var(--fw-regular); border-bottom: 1px solid var(--border); white-space: nowrap; }
+.hist tbody { font-family: var(--font-mono); }
+.hist tbody tr { height: var(--row-h); transition: background var(--dur-hover) var(--ease); }
+.hist tbody tr:hover { background: var(--surface-hover); }
+.hist td { padding: 0 10px; border-bottom: 1px solid var(--border); white-space: nowrap; } /* 10px, not the mock's 12: nine columns beside a 340px panel at 1024 */
+.hist td.status { white-space: normal; line-height: var(--lh-label); padding-top: 6px; padding-bottom: 6px; }
+.hist tbody tr:last-child td { border-bottom: 0; }
+.hist td:first-child { border-left: 2px solid transparent; }
+.hist .r { text-align: right; }
+.hist tr.unacked { background: color-mix(in srgb, var(--crit) 6%, transparent); }
+.hist tr.unacked td:first-child { border-left-color: var(--crit); }
+.hist tr.done { color: var(--fg-2); }
+.hist td.onset { color: var(--fg-2); }
+.hist tr.done td.onset { color: inherit; }
+.hist td.none { color: var(--fg-3); }
+.hist td.crit { color: var(--crit); }
+.hist td.det a { color: var(--fg); }
+.hist tr.done td.det a { color: inherit; }
+.hist td.by, .hist td.status { font-family: var(--font-sans); }
+.hist td.status.open { color: var(--crit); }
+.hist td.status.acked { color: var(--warn); }
+.hist td.status.sup { color: var(--fg-3); }
+.hist td.empty { padding: var(--sp-6); text-align: center; color: var(--fg-3); font-family: var(--font-sans); }
+.tag { display: inline-flex; align-items: center; padding: 1px 6px; border-radius: var(--r-chip); font-size: var(--fs-micro); font-family: var(--font-sans); }
+.tag.critical { background: var(--crit-soft); color: var(--crit); }
+.tag.warning { background: var(--warn-soft); color: var(--warn); }
+.tag.info { background: var(--info-soft); color: var(--info); }
+.tag.muted { background: var(--neutral-soft); color: var(--fg-2); }
+
+/* sidecar facts */
+.facts { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 16px; row-gap: 5px; padding: 10px 14px; font-family: var(--font-mono); font-size: var(--fs-label); }
+.facts .k { color: var(--fg-2); white-space: nowrap; }
+.facts .v { min-width: 0; overflow-wrap: anywhere; }
+.facts .v .dim { color: var(--fg-3); }
+.facts .v.none { color: var(--fg-3); }
+.card .note { padding: 10px 14px; font-size: var(--fs-label); color: var(--fg-3); }
+.card .foot { padding: 8px 14px; border-top: 1px solid var(--border); font-size: var(--fs-micro); color: var(--fg-3); }
+.card .foot a { font-size: var(--fs-micro); }
+
+/* thresholds */
+.thresh-rows { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 14px; row-gap: 5px; padding: 10px 14px; font-family: var(--font-mono); font-size: var(--fs-label); align-items: baseline; }
+.thresh-rows .d { color: var(--fg-2); min-width: 0; }
+.thresh-rows .d small { display: block; font-size: var(--fs-micro); color: var(--fg-3); }
+.thresh-rows .s.critical { color: var(--crit); }
+.thresh-rows .s.warning { color: var(--warn); }
+.thresh-rows .s.quiet { color: var(--quiet-fg); }
+.thresh-rows .off { color: var(--fg-3); }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="topbar">
+    <div class="brand"><span class="name">Zero</span><span class="org">Shielded Labs</span></div>
+    <nav class="nav" aria-label="sections">
+      <a href="/">Overview</a>
+      <span class="soon" title="coming">Incident</span>
+      <a class="active" href="" aria-current="page">Node</a>
+      <span id="nav-sidecar" class="soon" title="coming">Sidecar</span>
+    </nav>
+    <div class="topbar-right">
+      <span class="oncall">on call <b id="oncall" title="click to set your name">—</b></span>
+      <span class="pill crit" id="crit-pill" hidden><span class="dot"></span><span><span class="num" id="crit-n">0</span> critical open</span></span>
+      <span class="clock" id="clock">--:--:-- UTC</span>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="crumbs"><a href="/">Fleet</a><span>/</span><span id="crumb">—</span></div>
+
+    <div class="gone" id="gone" hidden></div>
+
+    <div class="node" id="node" hidden>
+      <div class="node-head">
+        <span class="h-title" id="title">—</span>
+        <span id="head-state"></span>
+        <span class="meta" id="meta"></span>
+        <div class="head-right">
+          <span class="live" id="live"><span class="dot"></span><span id="live-text">connecting</span></span>
+          <div class="seg" id="windows" role="group" aria-label="window">
+            <button type="button" data-win="1h">1h</button>
+            <button type="button" data-win="6h" class="active">6h</button>
+            <button type="button" data-win="24h">24h</button>
+            <button type="button" data-win="7d">7d</button>
+            <button type="button" data-win="30d">30d</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="charts" id="charts"></div>
+
+      <div class="cols">
+        <div class="col">
+          <div class="card lag" id="lag" hidden></div>
+          <div class="card">
+            <div class="card-head"><span id="hist-title">incident history</span><span class="count" id="hist-count"></span></div>
+            <div class="hist-wrap">
+              <table class="hist">
+                <thead><tr>
+                  <th>sev</th>
+                  <th>detector</th>
+                  <th>onset</th>
+                  <th class="r">detect</th>
+                  <th class="r">ack</th>
+                  <th class="r">respond</th>
+                  <th class="r">resolve</th>
+                  <th>by</th>
+                  <th>status</th>
+                </tr></thead>
+                <tbody id="hist-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="col side">
+          <div class="card">
+            <div class="card-head"><span>sidecar</span></div>
+            <div id="sidecar"></div>
+          </div>
+          <div class="card" id="thresholds-card" hidden>
+            <div class="card-head"><span>thresholds in effect</span></div>
+            <div class="thresh-rows" id="thresholds"></div>
+            <div class="foot">from the sidecar's configuration</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="node.js"></script>
+</body>
+</html>
