@@ -25,12 +25,17 @@
     respond: { placeholder: 'What did you tell the operator?', submit: 'Mark responded' },
     close: { placeholder: 'Reason for closing', submit: 'Close incident' },
   };
+  // label in the text -> row label, row style. The collector's analysis adds
+  // Assessment at the top and Confidence at the end; the sidecar's has the middle four.
   const TRIAGE_SECTIONS = [
+    ['Assessment', 'assessment', ''],
     ['Probable cause', 'probable cause', ''],
     ['Check next', 'what to check', ''],
     ['Regtest repro', 'regtest repro', 'mono'],
     ['Draft to operator', 'draft to operator', 'quote'],
+    ['Confidence', 'confidence', ''],
   ];
+  const TRIAGE_LABEL_RE = /^[ \t]*\**[ \t]*(Assessment|Probable cause|Check next|Regtest repro|Draft to operator|Confidence)[ \t]*\**[ \t]*:[ \t]*\**[ \t]*/gim;
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -56,6 +61,9 @@
     note: { open: false, mode: 'note' }, // the input's text lives in the DOM and survives refreshes
     logsExpanded: false,
     triageHidden: false, // "Discard" hides the draft for this page load
+    triageAvailable: null, // /api/triage/status: can this collector run an analysis?
+    triageRunning: false,
+    triageError: '', // last inline message from POST /triage (503 / 409 / 502)
     rendered: {}, // last HTML per region, so an unchanged region is not rebuilt
   };
 
@@ -126,12 +134,14 @@
     }
     state.clockOffset = inc.at - Math.round((t0 + Date.now()) / 2);
     const network = isNetwork(inc);
-    const [series, open, all, page] = await Promise.all([
+    const [series, open, all, page, triageStatus] = await Promise.all([
       network ? [] : getJSON('/api/series/' + encodeURIComponent(inc.label) + '?window=' + seriesWindow(inc)).catch((err) => { console.error('series failed', err); return state.series; }),
       getJSON('/api/incidents?state=open').catch((err) => { console.error('open incidents failed', err); return null; }),
       network && inc.members && inc.members.length ? getJSON('/api/incidents?window=30d').catch(() => null) : null,
       inc.bundleFile && inc.bundleFile !== state.pageBundleFile ? getJSON(bundleHref(inc.bundleFile)).catch((err) => { console.error('page-time bundle failed', err); return null; }) : undefined,
+      getJSON('/api/triage/status').catch(() => null),
     ]);
+    if (triageStatus && typeof triageStatus.available === 'boolean') state.triageAvailable = triageStatus.available;
     state.inc = inc;
     state.series = Array.isArray(series) ? series : [];
     if (Array.isArray(open)) state.critOpen = open.filter((i) => !i.transient && !i.resolvedAt && !i.suppressedBy && i.severity === 'critical').length;
@@ -187,16 +197,16 @@
     renderEvidence(inc);
     renderMembers(inc);
     if (isNetwork(inc)) {
-      for (const id of ['rpc-card', 'log-card', 'triage', 'snap-card']) $(id).hidden = true;
+      for (const id of ['rpc-card', 'log-card', 'snap-card']) $(id).hidden = true;
       $('no-bundle').hidden = false;
     } else {
       $('no-bundle').hidden = true;
       $('rpc-card').hidden = false; $('log-card').hidden = false; $('snap-card').hidden = false;
       renderChart(inc);
       renderLogs(inc);
-      renderTriage(inc);
       renderSnapshot(inc);
     }
+    renderTriage(inc);
     renderTrail(inc);
     renderRaw(inc);
     tick();
@@ -333,7 +343,22 @@
     setHref('a-report', '/api/incidents/' + encodeURIComponent(inc.id) + '/report');
     $('a-raw').hidden = !inc.bundleFile;
     if (inc.bundleFile) setHref('a-raw', bundleHref(inc.bundleFile));
+    renderTriageButton(inc);
     renderNoteBox();
+  }
+
+  function renderTriageButton(inc) {
+    const b = $('b-triage');
+    const avail = state.triageAvailable;
+    b.hidden = avail !== true;
+    $('report-sep').hidden = avail !== true && avail !== false;
+    b.disabled = state.triageRunning;
+    const label = state.triageRunning ? 'analysing…' : inc.triage ? 'Re-run analysis' : 'Ask Claude for an analysis';
+    if (b.textContent !== label) b.textContent = label;
+    const st = $('triage-status');
+    const text = state.triageError || (avail === false ? 'analysis: collector has no credentials' : '');
+    if (st.textContent !== text) st.textContent = text;
+    st.classList.toggle('err', !!state.triageError);
   }
 
   function renderNoteBox() {
@@ -474,7 +499,7 @@
   // "Probable cause: … Check next: … Regtest repro: … Draft to operator: …"
   // -> { 'Probable cause': text, … }, or null when fewer than two labels parse.
   function parseTriage(text) {
-    const re = /^[ \t]*\**[ \t]*(Probable cause|Check next|Regtest repro|Draft to operator)[ \t]*\**[ \t]*:[ \t]*\**[ \t]*/gim;
+    const re = new RegExp(TRIAGE_LABEL_RE.source, 'gim');
     const hits = [];
     let m;
     while ((m = re.exec(text))) hits.push({ label: m[1].toLowerCase(), start: m.index, end: m.index + m[0].length });
@@ -489,14 +514,23 @@
     return parsed && parsed['draft to operator'] ? parsed['draft to operator'] : triage && triage.text ? triage.text.trim() : '';
   }
 
+  // the collector's analysis when there is one, else the sidecar's page-time draft
+  function currentTriage(inc) {
+    if (inc.triage && inc.triage.text) return { ...inc.triage, source: 'collector' };
+    const t = state.pageBundle && state.pageBundle.triage;
+    return t && t.text ? { ...t, source: 'sidecar' } : null;
+  }
+
   function renderTriage(inc) {
-    const triage = state.pageBundle && state.pageBundle.triage;
-    const show = !!(triage && triage.text) && !state.triageHidden;
+    const triage = currentTriage(inc);
+    const show = !!triage && !state.triageHidden;
     $('triage').hidden = !show;
     if (!show) return;
-    const model = triage.model ? esc(triage.model) : 'the model';
+    const model = triage.model ? triage.model : 'the model';
     const when = triage.at ? 'at ' + stamp(triage.at) : 'at page time';
-    setText('triage-note', 'Triage draft — written by ' + model + ' ' + when + '. Nothing here is sent until a human approves it.');
+    setText('triage-note', triage.source === 'collector'
+      ? 'Analysis — requested by ' + (triage.by || '?') + ' ' + when + ', written by ' + model + ' on the collector. Nothing here is sent until a human approves it.'
+      : 'Triage draft — written by ' + model + ' ' + when + ' on the sidecar. Nothing here is sent until a human approves it.');
     const parsed = parseTriage(triage.text);
     if (parsed) {
       $('triage-grid').hidden = false; $('triage-raw').hidden = true;
@@ -544,6 +578,7 @@
         case 'close': row.verb = 'closed by hand'; row.text = q(n.text); break;
         case 'note': row.verb = 'noted'; row.text = q(n.text); break;
         case 'report': row.verb = 'sent the incident report'; break;
+        case 'triage': row.verb = 'asked Claude for an analysis'; break;
         default: row.verb = esc(n.action); row.text = q(n.text);
       }
       rows.push(row);
@@ -691,7 +726,29 @@
     $('note-submit').disabled = false;
     if (ok) closeNote();
   });
-  $('b-use-draft').addEventListener('click', () => openNote('respond', draftToOperator(state.pageBundle && state.pageBundle.triage)));
+  $('b-use-draft').addEventListener('click', () => openNote('respond', draftToOperator(state.inc && currentTriage(state.inc))));
+  $('b-triage').addEventListener('click', async () => {
+    const by = state.by || askName('');
+    if (!by || state.triageRunning) return;
+    state.triageRunning = true;
+    state.triageError = '';
+    renderTriageButton(state.inc);
+    try {
+      const r = await fetch('/api/incidents/' + encodeURIComponent(state.id) + '/triage', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ by }),
+      });
+      let body = null;
+      try { body = await r.json(); } catch { /* no JSON body */ }
+      if (!r.ok) throw new Error((body && body.error) || 'HTTP ' + r.status);
+      state.triageHidden = false; // a fresh analysis un-discards the box
+    } catch (err) {
+      console.error('triage failed', err);
+      state.triageError = err.message;
+    } finally {
+      state.triageRunning = false;
+      await refresh();
+    }
+  });
   $('b-discard').addEventListener('click', () => { state.triageHidden = true; $('triage').hidden = true; });
   $('log-foot').addEventListener('click', (e) => {
     const a = e.target.closest('#log-toggle');

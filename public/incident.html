@@ -105,6 +105,8 @@ input { font: inherit; }
 .acts-row a { font-size: var(--fs-label); padding: 4px 6px; }
 .acts-row.report { font-size: var(--fs-label); gap: var(--sp-2); }
 .acts-row.report a { padding: 0; }
+.acts-row.report .sep { color: var(--fg-3); }
+.acts-row.report .muted.err { color: var(--crit); }
 .note-row { display: flex; gap: var(--sp-2); }
 .note-row input { flex: 1; background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: var(--r-control); color: var(--fg); padding: 5px 10px; }
 .note-row input::placeholder { color: var(--fg-3); }
@@ -232,9 +234,11 @@ input { font: inherit; }
             <a id="a-raw" target="_blank" rel="noopener">raw JSON bundle ↗</a>
           </div>
           <div class="acts-row report">
+            <button type="button" class="btn small" id="b-triage" hidden>Ask Claude for an analysis</button>
+            <span class="muted" id="triage-status"></span>
+            <span class="sep" id="report-sep" hidden>·</span>
             <a id="a-report" target="_blank" rel="noopener">Incident report ↗</a>
             <button type="button" class="btn small" id="b-report">Report sent</button>
-            <span class="muted">customer-facing, built from this record</span>
           </div>
           <form class="note-row" id="note-row" hidden>
             <input id="note-text" autocomplete="off" placeholder="Add a note to the audit trail">
