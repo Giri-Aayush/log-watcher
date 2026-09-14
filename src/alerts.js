@@ -60,6 +60,9 @@ class AlertManager extends EventEmitter {
       evidence: a.evidence || {},
       suggest: a.suggest || null,
       transient: !!a.transient,
+      // when the condition began, as best the detector knows; firstSeen - onsetAt
+      // is our detection latency and is what the collector's MTTD is built from
+      onsetAt: a.onsetAt || now,
       firstSeen: now,
       lastSeen: now,
       notifiedAt: now,
@@ -113,6 +116,8 @@ class AlertManager extends EventEmitter {
       title: alert.title,
       detail: alert.detail,
       suggest: alert.suggest,
+      onsetAt: alert.onsetAt,
+      pagedAt: alert.firstSeen,
       at: new Date(alert.lastSeen).toISOString(),
       label: this.cfg.label,
       sidecar: this.getSidecar(),

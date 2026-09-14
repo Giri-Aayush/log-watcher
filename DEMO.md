@@ -44,6 +44,12 @@ alert, same bundle, on the Zero side, delivered outbound-only.
 Threshold is 1 minute here for the demo; the real default is 10 (at 75 s spacing,
 P(no block in 10 min) ≈ e⁻⁸ — it cannot page faster without paging falsely).
 
+On the collector tab, click **ack** on the incident, then **responded** and type
+what you told the operator. Those two clicks are what make the response metrics
+real: the tiles at the top (time to detect / acknowledge / respond / resolve, p50
+and p95) are computed from exactly these timestamps. "Oldest unacked" is the
+number an on-call lead watches.
+
 ```bash
 scripts/demo-live.sh mine 1      # -> RESOLVED tip_stalled, new block in the events feed
 ```

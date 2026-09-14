@@ -72,6 +72,17 @@ test('rpc: down after N consecutive failures, resolves on recovery; slow raises 
   assert.equal(h.resolved.at(-1).key, 'rpc_slow');
 });
 
+test('rpc_down resolves after a restart even though the banner arrives before the first good poll', () => {
+  const h = harness({ rpcFailCount: 2 });
+  const fail = () => h.d.onPoll({ ok: false, ms: 5, error: { message: 'ECONNREFUSED', kind: 'network' } });
+  fail(); fail();
+  assert.deepEqual(h.keys(), ['rpc_down']);
+  h.feed(lines.banner); // node came back; its log is read before RPC is polled again
+  h.ok();
+  assert.equal(h.resolved[0].key, 'rpc_down');
+  assert.match(h.resolved[0].detail, /after 2 failures/);
+});
+
 test('peers: warning after two low polls, critical at zero, resolves when back', () => {
   const h = harness({ minPeers: 3 });
   h.ok({ peers: [{}] });

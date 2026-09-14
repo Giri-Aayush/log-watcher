@@ -31,8 +31,9 @@ class Detectors extends EventEmitter {
       peers: null,
       peersLowPolls: 0,
       mempool: null,
-      rpc: { ok: null, ms: null, failures: 0, lastError: null, at: null, history: [] },
+      rpc: { ok: null, ms: null, failures: 0, lastError: null, at: null, history: [], firstFailureAt: null },
       peerSummary: null,
+      peersLowSince: null,
       logDelayMs: null,
       node: { version: null, network: null, build: null, subversion: null, errors: null },
       haltHeight: null,
@@ -83,11 +84,12 @@ class Detectors extends EventEmitter {
           this.raise('sync_stalled', 'critical', 'Zebra reports chain updates have stalled',
             `zebrad has not committed a block for ${ev.sinceLastBlockS != null ? fmtAge(ev.sinceLastBlockS * 1000) : 'a while'} at height ${ev.height}. Zebra's own hint: check network connectivity and the machine clock.`,
             { height: ev.height, sinceLastBlockS: ev.sinceLastBlockS, syncPercent: ev.percent },
-            { suggest: 'getpeerinfo (are there peers?), compare tip with another node/explorer, `date` on the host, then check the log for the peer_set warnings that precede a stall.' });
+            { onsetAt: ev.sinceLastBlockS != null ? now - ev.sinceLastBlockS * 1000 : now,
+              suggest: 'getpeerinfo (are there peers?), compare tip with another node/explorer, `date` on the host, then check the log for the peer_set warnings that precede a stall.' });
         } else if (ev.state === 'very_slow') {
           this.raise('sync_stalled', 'warning', 'Initial sync is very slow or the estimated tip is wrong',
             `sync at ${ev.percent}% height ${ev.height}, ${ev.remaining} blocks remaining.`,
-            { height: ev.height, remaining: ev.remaining, syncPercent: ev.percent });
+            { height: ev.height, remaining: ev.remaining, syncPercent: ev.percent }, { onsetAt: now });
         } else if (ev.state === 'at_tip' || ev.state === 'syncing') {
           this.resolve('sync_stalled', `sync progressing: ${ev.state} at height ${ev.height}`);
         }
@@ -99,7 +101,6 @@ class Detectors extends EventEmitter {
         this.raise('node_restarted', 'info', 'zebrad (re)started',
           'The startup banner appeared in the log. Version and network follow in the next lines.',
           {}, { transient: true });
-        this.state.rpc.failures = 0;
         break;
 
       case 'end_of_support':
@@ -146,7 +147,7 @@ class Detectors extends EventEmitter {
     if (s.warnTimes.length >= this.t.errorBurst) {
       this.raise('error_burst', 'warning', `${s.warnTimes.length} warnings/errors in ${this.t.errorWindowS}s`,
         `Most recent: [${entry.level}] ${entry.target}: ${entry.message}`,
-        { count: s.warnTimes.length, windowS: this.t.errorWindowS, last: s.lastWarnError });
+        { count: s.warnTimes.length, windowS: this.t.errorWindowS, last: s.lastWarnError }, { onsetAt: s.warnTimes[0] });
     }
   }
 
@@ -171,6 +172,7 @@ class Detectors extends EventEmitter {
     if (r.history.length > 240) r.history.shift();
     if (!sample.ok) {
       r.ok = false;
+      if (r.failures === 0) r.firstFailureAt = now;
       r.failures++;
       r.lastError = { message: sample.error.message, kind: sample.error.kind }; // Error.message is not enumerable
       r.ms = sample.ms;
@@ -179,15 +181,16 @@ class Detectors extends EventEmitter {
         this.raise('rpc_down', 'critical', `RPC unreachable (${r.failures} consecutive failures)`,
           `${sample.error.message}. Panics go to stderr, not the log file, so a dead node looks like silence in the log and a refused connection here.`,
           { failures: r.failures, lastError: sample.error.message, kind: sample.error.kind },
-          { suggest: 'Is the process up? `docker ps` / `systemctl status zebrad`; then check stderr / journal for a panic; then rpc.listen_addr and the cookie.' });
+          { onsetAt: r.firstFailureAt, suggest: 'Is the process up? `docker ps` / `systemctl status zebrad`; then check stderr / journal for a panic; then rpc.listen_addr and the cookie.' });
       }
       return;
     }
 
+    const wasDown = r.ok === false;
     const failures = r.failures;
     r.ok = true;
     r.failures = 0;
-    if (failures) this.resolve('rpc_down', `RPC back after ${failures} failures (${sample.ms}ms)`);
+    if (wasDown) this.resolve('rpc_down', `RPC back after ${failures} failures (${sample.ms}ms)`);
     r.lastError = null;
     r.ms = sample.ms;
     r.at = now;
@@ -195,7 +198,7 @@ class Detectors extends EventEmitter {
     if (sample.ms > this.t.rpcSlowMs) {
       this.raise('rpc_slow', 'warning', `RPC slow: ${sample.ms}ms`,
         `getblockchaininfo took ${sample.ms}ms (threshold ${this.t.rpcSlowMs}ms). Miners see this as getblocktemplate timeouts.`,
-        { ms: sample.ms, thresholdMs: this.t.rpcSlowMs });
+        { ms: sample.ms, thresholdMs: this.t.rpcSlowMs }, { onsetAt: now - sample.ms });
     } else {
       this.resolve('rpc_slow', `RPC latency ${sample.ms}ms`);
     }
@@ -250,6 +253,7 @@ class Detectors extends EventEmitter {
       this.state.peers = sample.peers.length;
       this.state.peerSummary = summarizePeers(sample.peers);
       if (sample.peers.length < this.t.minPeers) {
+        if (this.state.peersLowPolls === 0) this.state.peersLowSince = now;
         this.state.peersLowPolls++;
         if (this.state.peersLowPolls >= 2) {
           const sev = sample.peers.length === 0 ? 'critical' : 'warning';
@@ -258,7 +262,7 @@ class Detectors extends EventEmitter {
               ? 'No peers at all: the node cannot receive blocks. A miner on this node is mining on a stale tip.'
               : 'Few peers means slow block propagation and a higher chance of mining on a stale tip.',
             { peers: sample.peers.length, minPeers: this.t.minPeers },
-            { suggest: 'Check outbound connectivity to the DNS seeders, the P2P port (8233/18233) and whether the address book cache is stale.' });
+            { onsetAt: this.state.peersLowSince, suggest: 'Check outbound connectivity to the DNS seeders, the P2P port (8233/18233) and whether the address book cache is stale.' });
         }
       } else {
         this.state.peersLowPolls = 0;
@@ -329,7 +333,7 @@ class Detectors extends EventEmitter {
       this.raise('tip_stalled', 'critical', `No new block for ${fmtAge(age)}`,
         `Tip is still ${tip.height} (last seen via ${tip.source}). Target spacing is 75s; ${this.t.tipStallMin}m without a block means this node stopped receiving them, or the network did.`,
         { height: tip.height, hash: tip.hash, ageS: Math.round(age / 1000), peers: this.state.peers },
-        { suggest: 'Compare height with a public explorer or a second node. If they moved on, this node is partitioned (peers?) or stuck verifying; if not, it is the network.' });
+        { onsetAt: tip.at, suggest: 'Compare height with a public explorer or a second node. If they moved on, this node is partitioned (peers?) or stuck verifying; if not, it is the network.' });
     }
   }
 

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zero · fleet</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <div class="id">
+      <h1>Zero collector <span class="name">fleet</span></h1>
+      <div class="sub"><span id="stamp">–</span><span class="sep">·</span>window <select id="window" class="mono"><option value="1h">1h</option><option value="6h">6h</option><option value="24h" selected>24h</option><option value="7d">7d</option><option value="30d">30d</option></select></div>
+    </div>
+    <div class="flow">
+      <span>nodes <b id="t-nodes">–</b></span>
+      <span>incidents <b id="t-incidents">–</b></span>
+      <span>open <b id="t-open">–</b></span>
+      <span>unacked <b id="t-unacked">–</b></span>
+    </div>
+    <div id="status" class="pill">loading</div>
+  </header>
+
+  <section class="cards">
+    <div class="card"><div class="k">time to detect · p50 / p95</div><div class="v" id="m-detect">–</div><div class="s">page − onset</div></div>
+    <div class="card"><div class="k">time to acknowledge</div><div class="v" id="m-ack">–</div><div class="s">ack − page</div></div>
+    <div class="card"><div class="k">time to respond</div><div class="v" id="m-respond">–</div><div class="s">told the operator − page</div></div>
+    <div class="card"><div class="k">time to resolve</div><div class="v" id="m-resolve">–</div><div class="s">cleared − onset</div></div>
+    <div class="card"><div class="k">oldest unacked</div><div class="v" id="m-oldest">–</div><div class="s">the number that should be zero</div></div>
+    <div class="card"><div class="k">noisiest detector</div><div class="v" id="m-noisy">–</div><div class="s" id="m-noisy-s"></div></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Fleet</h2><span class="muted" id="fleet-sub"></span></div>
+    <div class="scroll"><table class="grid" id="fleet"><thead><tr>
+      <th>node</th><th>state</th><th class="num">seen</th><th>zebrad</th><th>network</th><th class="num">tip</th><th class="num">tip age</th><th class="num">peers</th><th class="num">rpc</th><th class="num">mempool</th><th class="num">log lag</th><th>open</th>
+    </tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Incidents</h2><span class="muted" id="inc-sub"></span></div>
+    <div class="scroll"><table class="grid" id="incidents"><thead><tr>
+      <th>paged</th><th>node</th><th>sev</th><th>key</th><th>title</th><th class="num">detect</th><th class="num">ack</th><th class="num">respond</th><th class="num">resolve</th><th>state</th><th>actions</th>
+    </tr></thead><tbody></tbody></table></div>
+  </section>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const BY = (localStorage.getItem('lw-by') || '').trim();
+function dur(ms) {
+  if (ms == null) return '–';
+  const s = Math.round(ms / 1000);
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm' + (s % 60 ? ' ' + (s % 60) + 's' : '');
+  const h = Math.floor(m / 60);
+  return h + 'h ' + (m % 60) + 'm';
+}
+const ts = (t) => t ? new Date(t).toISOString().slice(5, 19).replace('T', ' ') + 'Z' : '–';
+const pair = (st) => st && st.count ? `${dur(st.p50)} / ${dur(st.p95)}` : '–';
+
+async function load() {
+  const w = $('window').value;
+  const [fleet, analytics, incidents] = await Promise.all([
+    fetch('/api/fleet').then((r) => r.json()),
+    fetch('/api/analytics?window=' + w).then((r) => r.json()),
+    fetch('/api/incidents?window=' + w).then((r) => r.json()),
+  ]);
+  $('stamp').textContent = new Date(analytics.at).toISOString().slice(0, 19) + 'Z';
+  const t = analytics.totals;
+  $('t-nodes').textContent = t.nodes; $('t-incidents').textContent = t.incidents; $('t-open').textContent = t.open; $('t-unacked').textContent = t.unacked;
+  const crit = fleet.some((n) => n.state === 'critical' || n.state === 'quiet');
+  $('status').textContent = crit ? 'critical' : fleet.some((n) => n.state === 'degraded') ? 'degraded' : fleet.length ? 'ok' : 'no nodes';
+  $('status').className = 'pill ' + (crit ? 'bad' : fleet.some((n) => n.state === 'degraded') ? 'warn' : 'ok');
+  const L = analytics.latency;
+  $('m-detect').textContent = pair(L.detect); $('m-ack').textContent = pair(L.ack); $('m-respond').textContent = pair(L.respond); $('m-resolve').textContent = pair(L.resolve);
+  $('m-oldest').textContent = analytics.oldestUnackedS != null ? dur(analytics.oldestUnackedS * 1000) : '0';
+  $('m-oldest').className = 'v' + (analytics.oldestUnackedS > 600 ? ' bad' : analytics.oldestUnackedS > 0 ? ' warn' : ' ok');
+  const noisy = analytics.noisiest[0];
+  $('m-noisy').textContent = noisy ? noisy.key : '–'; $('m-noisy-s').textContent = noisy ? noisy.count + ' in window' : '';
+
+  $('fleet-sub').textContent = `${fleet.length} node${fleet.length === 1 ? '' : 's'} · ${t.quietNodes} quiet`;
+  $('fleet').tBodies[0].innerHTML = fleet.map((n) => `<tr>
+    <td class="mono"><b>${esc(n.label)}</b></td>
+    <td><span class="pill ${n.state}">${n.state}</span></td>
+    <td class="num">${n.silentS != null ? n.silentS + 's' : '–'}</td>
+    <td class="mono">${esc(n.node ? n.node.build || n.node.version || '?' : '?')}</td>
+    <td>${esc(n.node ? n.node.network || '' : '')}</td>
+    <td class="num">${n.tip ? n.tip.height : '–'}</td>
+    <td class="num">${n.tipAgeS != null ? dur(n.tipAgeS * 1000) : '–'}</td>
+    <td class="num">${n.peers ?? '–'}</td>
+    <td class="num">${n.rpc ? (n.rpc.ok === false ? '<span class="pill bad">down</span>' : n.rpc.ms + ' ms') : '–'}</td>
+    <td class="num">${n.mempool ? n.mempool.size : '–'}</td>
+    <td class="num">${n.logDelayMs != null ? n.logDelayMs + ' ms' : '–'}</td>
+    <td>${n.open.map((o) => `<span class="chip ${o.severity}">${esc(o.key)}${o.acked ? ' ✓' : ''}</span>`).join('') || '<span class="muted">–</span>'}</td>
+  </tr>`).join('') || '<tr><td colspan="12" class="empty">no heartbeats yet</td></tr>';
+
+  const rows = incidents.filter((i) => !i.transient);
+  $('inc-sub').textContent = `${rows.length} incidents · ${incidents.length - rows.length} events`;
+  $('incidents').tBodies[0].innerHTML = rows.map((i) => {
+    const state = i.resolvedAt ? (i.closedBy ? 'closed' : 'resolved') : i.respondedAt ? 'responded' : i.ackedAt ? 'acked' : 'open';
+    const act = (a, label) => `<a href="#" data-id="${esc(i.id)}" data-act="${a}">${label}</a>`;
+    const actions = i.resolvedAt ? '' : [!i.ackedAt && act('ack', 'ack'), !i.respondedAt && act('respond', 'responded'), act('close', 'close')].filter(Boolean).join(' · ');
+    return `<tr class="${i.severity}">
+      <td class="mono">${ts(i.pagedAt)}</td>
+      <td class="mono">${esc(i.label)}</td>
+      <td><span class="sev">${i.severity}</span></td>
+      <td class="mono">${esc(i.key)}</td>
+      <td>${esc(i.title)}${i.escalations ? ` <span class="chip warning">esc ×${i.escalations}</span>` : ''}</td>
+      <td class="num">${dur(i.pagedAt - i.onsetAt)}</td>
+      <td class="num">${i.ackedAt ? dur(i.ackedAt - i.pagedAt) : (i.resolvedAt ? '–' : '<span class="pill bad">' + dur(Date.now() - i.pagedAt) + '</span>')}</td>
+      <td class="num">${i.respondedAt ? dur(i.respondedAt - i.pagedAt) : '–'}</td>
+      <td class="num">${i.resolvedAt ? dur(i.resolvedAt - i.onsetAt) : '<span class="muted">open ' + dur(Date.now() - i.pagedAt) + '</span>'}</td>
+      <td><span class="pill ${state === 'open' ? 'bad' : state === 'resolved' || state === 'closed' ? 'ok' : 'info'}">${state}</span></td>
+      <td>${actions}${i.bundleFile ? (actions ? ' · ' : '') + `<a href="/bundles/${esc(i.bundleFile.replace(/^bundles\//, ''))}" target="_blank">bundle</a>` : ''}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="11" class="empty">no incidents in this window</td></tr>';
+}
+
+document.addEventListener('click', async (e) => {
+  const a = e.target.closest('a[data-act]');
+  if (!a) return;
+  e.preventDefault();
+  let by = BY || prompt('your name (remembered):', '');
+  if (by == null) return;
+  localStorage.setItem('lw-by', by);
+  const text = a.dataset.act === 'ack' ? null : prompt(a.dataset.act === 'respond' ? 'what did you tell the operator?' : 'why close it?', '');
+  await fetch(`/api/incidents/${encodeURIComponent(a.dataset.id)}/${a.dataset.act}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ by, text }) });
+  load();
+});
+$('window').addEventListener('change', load);
+load();
+setInterval(load, 3000);
+</script>
+</body>
+</html>
