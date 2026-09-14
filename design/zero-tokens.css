@@ -1,0 +1,85 @@
+/* Zero ops console — design tokens. Dark by default; light scope at bottom.
+   Implement with plain HTML/CSS/JS + inline SVG. No framework. */
+@import url('https://api.fontshare.com/v2/css?f[]=general-sans@400,500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* surfaces */
+  --bg:             #0A0A0F;
+  --bg-elevated:    #0D0D12;   /* top bar, table header strip, inputs */
+  --surface:        #14141A;   /* cards, hovered rows */
+  --surface-hover:  #1A1A22;
+  --border:         rgba(160,150,200,0.08);
+  --border-strong:  rgba(160,150,200,0.14);
+
+  /* text */
+  --fg:             #E8E6F0;
+  --fg-2:           #9B97A8;
+  --fg-3:           #65636F;
+
+  /* state — the only color in the UI */
+  --ok:             #10B981;  --ok-soft:       rgba(16,185,129,0.16);
+  --warn:           #F59E0B;  --warn-soft:     rgba(245,158,11,0.16);
+  --crit:           #EF4444;  --crit-soft:     rgba(239,68,68,0.16);
+  --quiet:          #A35A5E;  --quiet-soft:    rgba(163,90,94,0.18);   /* grey-red: no heartbeat / unknown */
+  --info:           #3B82F6;  --info-soft:     rgba(59,130,246,0.16);
+  --neutral:        #65636F;  --neutral-soft:  rgba(160,150,200,0.10);
+
+  /* interaction (links, focus, active nav only) */
+  --accent:         #A78BFA;
+  --accent-soft:    rgba(167,139,250,0.14);
+  --focus-ring:     0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+
+  /* type — 13px base, mono for every number */
+  --font-sans:      'General Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:      'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --fs-micro:       11px;  --lh-micro: 1.4;    /* tile labels, meta, kbd */
+  --fs-label:       12px;  --lh-label: 1.4;    /* table cells (mono), pills */
+  --fs-body:        13px;  --lh-body:  1.45;   /* base */
+  --fs-title:       15px;  --lh-title: 1.3;    /* section titles */
+  --fs-number:      22px;  --lh-number: 1.1;   /* KPI p50 */
+  --fs-number-lg:   28px;  --lh-number-lg: 1.1;/* live clock */
+  --fw-regular:     400;
+  --fw-medium:      500;   /* never higher */
+  --tracking-label: 0.02em;
+
+  /* spacing — 4px base */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px;
+  --sp-6: 24px; --sp-8: 32px; --sp-10: 40px; --sp-12: 48px;
+  --row-h:          32px;   /* table row */
+  --bar-h:          44px;   /* top bar */
+
+  /* radii */
+  --r-chip:         4px;
+  --r-control:      6px;    /* buttons, pills, inputs */
+  --r-card:         8px;
+
+  /* motion */
+  --ease:           cubic-bezier(0.4,0,0.2,1);
+  --dur-micro:      120ms;
+  --dur-hover:      180ms;
+
+  /* layout */
+  --page-max:       1440px;
+  --page-min:       1024px;
+  --gutter:         24px;
+}
+
+html, body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: var(--fw-regular) var(--fs-body)/var(--lh-body) var(--font-sans);
+  font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased;
+}
+.num, td.num, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+*:focus { outline: none; }
+*:focus-visible { box-shadow: var(--focus-ring); border-radius: var(--r-chip); }
+
+/* light variant (secondary) — set data-theme="light" on <html> */
+[data-theme="light"] {
+  --bg: #F7F7F5; --bg-elevated: #FFFFFF; --surface: #FFFFFF; --surface-hover: #F0F0EE;
+  --border: rgba(30,30,50,0.10); --border-strong: rgba(30,30,50,0.18);
+  --fg: #1A1A1F; --fg-2: #55545C; --fg-3: #8A8892;
+  --ok: #0F7A5A; --warn: #B26A00; --crit: #B4251E; --quiet: #8A4A4E; --info: #1D5FCC;
+}

@@ -286,8 +286,12 @@ class Store {
     });
 
     const unacked = open.filter((i) => !i.ackedAt);
+    // fleet availability: share of node-time in the window with no critical open
+    const knownMs = perNode.reduce((a, n) => a + Math.min(windowMs, now - (this.nodes.get(n.label).firstSeen)), 0);
+    const criticalMs = perNode.reduce((a, n) => a + n.criticalMs, 0);
     return {
       window: windowMs, at: now,
+      availability: knownMs > 0 ? Math.max(0, 1 - criticalMs / knownMs) : null,
       delivery: stats(all.map((i) => i.receivedAt - i.pagedAt)), // page -> here, includes skew
       totals: { incidents: incidents.length, events: events.length, open: open.length, unacked: unacked.length, nodes: this.nodes.size, quietNodes: [...this.nodes.values()].filter((n) => n.quiet).length },
       bySeverity: count(incidents, 'severity'), byKey: count(incidents, 'key'), byNode: count(incidents, 'label'),

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+html,body{margin:0;background:#0A0A0F;color:#E8E6F0;font:400 13px/1.45 'General Sans',system-ui,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+a{color:#A78BFA;text-decoration:none}a:hover{text-decoration:underline}
+button{font:inherit;cursor:pointer}
+</style>
+</helmet>
+<div data-screen-label="Overview" style="min-width:1024px;max-width:1440px;margin:0 auto;min-height:100vh;background:#0A0A0F;color:#E8E6F0">
+  <div style="height:44px;display:flex;align-items:center;gap:16px;padding:0 24px;border-bottom:1px solid rgba(160,150,200,0.08);background:#0D0D12;white-space:nowrap;overflow:hidden">
+    <div style="display:flex;align-items:baseline;gap:8px"><span style="font-weight:500;font-size:14px">Zero</span><span style="font-size:11px;color:#65636F">Shielded Labs</span></div>
+    <nav style="display:flex;gap:4px">
+      <a href="Zero%20Overview.dc.html" style="padding:4px 10px;border-radius:6px;color:#E8E6F0;background:#1A1A22;text-decoration:none">Overview</a>
+      <a href="Zero%20Incident.dc.html" style="padding:4px 10px;border-radius:6px;color:#9B97A8;text-decoration:none">Incident</a>
+      <a href="Zero%20Node.dc.html" style="padding:4px 10px;border-radius:6px;color:#9B97A8;text-decoration:none">Node</a>
+      <a href="Zero%20Sidecar.dc.html" style="padding:4px 10px;border-radius:6px;color:#9B97A8;text-decoration:none">Sidecar</a>
+      <a href="Zero%20Components.dc.html" style="padding:4px 10px;border-radius:6px;color:#9B97A8;text-decoration:none">Components</a>
+    </nav>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+      <span style="display:inline-flex;align-items:center;padding:2px 7px;border:1px solid rgba(160,150,200,0.08);border-radius:6px;background:#0A0A0F;color:#65636F;font-size:11px">⌘K</span>
+      <span style="font-size:12px;color:#9B97A8">on call <span style="color:#E8E6F0">aayush</span></span>
+      <span style="display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:6px;background:rgba(239,68,68,0.16);color:#EF4444;font-size:12px"><span style="width:6px;height:6px;border-radius:50%;background:#EF4444"></span>1 critical open</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#9B97A8">{{ clock }} UTC</span>
+    </div>
+  </div>
+
+  <div style="padding:16px 24px 32px;display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;align-items:center;gap:20px">
+      <span style="font-size:15px;font-weight:500">Fleet</span>
+      <div style="display:flex;border:1px solid rgba(160,150,200,0.08);border-radius:6px;overflow:hidden;background:#0D0D12">
+        <button onClick="{{ set1h }}" style="border:0;padding:3px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;background:{{ bg1h }};color:{{ fg1h }}">1h</button>
+        <button onClick="{{ set6h }}" style="border:0;padding:3px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;background:{{ bg6h }};color:{{ fg6h }}">6h</button>
+        <button onClick="{{ set24h }}" style="border:0;padding:3px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;background:{{ bg24h }};color:{{ fg24h }}">24h</button>
+        <button onClick="{{ set7d }}" style="border:0;padding:3px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;background:{{ bg7d }};color:{{ fg7d }}">7d</button>
+        <button onClick="{{ set30d }}" style="border:0;padding:3px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;background:{{ bg30d }};color:{{ fg30d }}">30d</button>
+      </div>
+      <div style="display:flex;gap:20px;font-size:12px;color:#9B97A8;font-family:'JetBrains Mono',monospace;white-space:nowrap">
+        <span><span style="color:#E8E6F0">3</span> nodes</span>
+        <span><span style="color:#E8E6F0">14</span> incidents</span>
+        <span><span style="color:#E8E6F0">{{ openCount }}</span> open</span>
+        <span><span style="color:{{ unackedColor }}">{{ unackedCount }}</span> unacknowledged</span>
+      </div>
+      <span style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#65636F"><span style="width:6px;height:6px;border-radius:50%;background:#10B981"></span>live · updated {{ updated }}</span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:1px;background:rgba(160,150,200,0.08);border:1px solid rgba(160,150,200,0.08);border-radius:8px;overflow:hidden">
+      <div style="background:#14141A;padding:12px 14px;display:flex;flex-direction:column;gap:6px">
+        <span style="font-size:11px;color:#9B97A8;letter-spacing:0.02em;white-space:nowrap">time to detect</span>
+        <div style="display:flex;align-items:baseline;gap:6px;font-family:'JetBrains Mono',monospace;white-space:nowrap"><span style="font-size:22px;font-weight:500;line-height:1.1">3s</span><span style="font-size:12px;color:#9B97A8">/ 1m</span></div>
+        <span style="font-size:11px;color:#65636F;font-family:'JetBrains Mono',monospace;white-space:nowrap">p50 / p95 · n=14</span>
+      </div>
+      <div style="background:#14141A;padding:12px 14px;display:flex;flex-direction:column;gap:6px">
+        <span style="font-size:11px;color:#9B97A8;letter-spacing:0.02em;white-space:nowrap">time to acknowledge</span>
+        <div style="display:flex;align-items:baseline;gap:6px;font-family:'JetBrains Mono',monospace;white-space:nowrap"><span style="font-size:22px;font-weight:500;line-height:1.1">2m 10s</span><span style="font-size:12px;color:#9B97A8">/ 9m 40s</span></div>
+        <span style="font-size:11px;color:#65636F;font-family:'JetBrains Mono',monospace;white-space:nowrap">p50 / p95 · n=11</span>
+      </div>
+      <div style="background:#14141A;padding:12px 14px;display:flex;flex-direction:column;gap:6px">
+        <span style="font-size:11px;color:#9B97A8;letter-spacing:0.02em;white-space:nowrap">time to respond</span>
+        <div style="display:flex;align-items:baseline;gap:6px;font-family:'JetBrains Mono',monospace;white-space:nowrap"><span style="font-size:22px;font-weight:500;line-height:1.1">6m</span><span style="font-size:12px;color:#9B97A8">/ 22m</span></div>
+        <span style="font-size:11px;color:#65636F;font-family:'JetBrains Mono',monospace;white-space:nowrap">p50 / p95 · n=9</span>
+      </div>
+      <div style="background:#14141A;padding:12px 14px;display:flex;flex-direction:column;gap:6px">
+        <span style="font-size:11px;color:#9B97A8;letter-spacing:0.02em;white-space:nowrap">time to resolve</span>
+        <div style="display:flex;align-items:baseline;gap:6px;font-family:'JetBrains Mono',monospace;white-space:nowrap"><span style="font-size:22px;font-weight:500;line-height:1.1">14m</span><span style="font-size:12px;color:#9B97A8">/ 1h 05m</span></div>
+        <span style="font-size:11px;color:#65636F;font-family:'JetBrains Mono',monospace;white-space:nowrap">p50 / p95 · n=12</span>
+      </div>
+      <div style="background:#14141A;padding:12px 14px;display:flex;flex-direction:column;gap:6px;box-shadow:inset 0 0 0 1px {{ oldestColor }}">
+        <span style="font-size:11px;color:#9B97A8;letter-spacing:0.02em;white-space:nowrap">oldest unacknowledged</span>
+        <div style="display:flex;align-items:baseline;gap:6px;font-family:'JetBrains Mono',monospace;white-space:nowrap"><span style="font-size:22px;font-weight:500;line-height:1.1;color:{{ oldestColor }}">{{ oldestUnacked }}</span></div>
+        <span style="font-size:11px;color:#65636F;font-family:'JetBrains Mono',monospace;white-space:nowrap">{{ oldestNote }}</span>
+      </div>
+      <div style="background:#14141A;padding:12px 14px;display:flex;flex-direction:column;gap:6px">
+        <span style="font-size:11px;color:#9B97A8;letter-spacing:0.02em;white-space:nowrap">availability</span>
+        <div style="display:flex;align-items:baseline;gap:6px;font-family:'JetBrains Mono',monospace;white-space:nowrap"><span style="font-size:22px;font-weight:500;line-height:1.1">99.2%</span></div>
+        <span style="font-size:11px;color:#65636F;font-family:'JetBrains Mono',monospace;white-space:nowrap">no critical open · 24h</span>
+      </div>
+      <div style="background:#14141A;padding:12px 14px;display:flex;flex-direction:column;gap:6px">
+        <span style="font-size:11px;color:#9B97A8;letter-spacing:0.02em;white-space:nowrap">noisiest detector</span>
+        <div style="display:flex;align-items:baseline;gap:6px;font-family:'JetBrains Mono',monospace;white-space:nowrap"><span style="font-size:22px;font-weight:500;line-height:1.1">peers_low</span></div>
+        <span style="font-size:11px;color:#65636F;font-family:'JetBrains Mono',monospace;white-space:nowrap">5 of 14 incidents</span>
+      </div>
+    </div>
+
+    <div style="border:1px solid rgba(160,150,200,0.08);border-radius:8px;background:#14141A;padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:center;gap:16px">
+        <span style="font-size:12px;color:#9B97A8">incidents per hour</span>
+        <div style="display:flex;gap:12px;font-size:11px;color:#9B97A8;margin-left:auto;white-space:nowrap">
+          <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;background:#EF4444"></span>critical 3</span>
+          <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;background:#F59E0B"></span>warning 7</span>
+          <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;background:#3B82F6"></span>info 4</span>
+        </div>
+      </div>
+      <svg viewBox="0 0 960 90" preserveAspectRatio="none" style="width:100%;height:90px;display:block">
+        <line x1="0" y1="89.5" x2="960" y2="89.5" stroke="rgba(160,150,200,0.14)"></line>
+        <line x1="0" y1="30" x2="960" y2="30" stroke="rgba(160,150,200,0.06)"></line>
+        <line x1="0" y1="60" x2="960" y2="60" stroke="rgba(160,150,200,0.06)"></line>
+        <path d="{{ infoBars }}" fill="#3B82F6"></path>
+        <path d="{{ warnBars }}" fill="#F59E0B"></path>
+        <path d="{{ critBars }}" fill="#EF4444"></path>
+      </svg>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#65636F;font-family:'JetBrains Mono',monospace"><span>−24h</span><span>−18h</span><span>−12h</span><span>−6h</span><span>now</span></div>
+    </div>
+
+    <div style="border:1px solid rgba(160,150,200,0.08);border-radius:8px;background:#14141A;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-bottom:1px solid rgba(160,150,200,0.08);font-size:12px">
+        <span style="color:#9B97A8;margin-right:6px">nodes</span>
+        <span style="padding:1px 8px;border-radius:6px;background:#1A1A22;color:#E8E6F0;font-size:11px">all 3</span>
+        <span style="padding:1px 8px;border-radius:6px;color:#9B97A8;font-size:11px">critical 1</span>
+        <span style="padding:1px 8px;border-radius:6px;color:#9B97A8;font-size:11px">degraded 0</span>
+        <span style="padding:1px 8px;border-radius:6px;color:#9B97A8;font-size:11px">quiet 1</span>
+        <span style="padding:1px 8px;border-radius:6px;color:#9B97A8;font-size:11px">Mainnet 3</span>
+        <span style="margin-left:auto;font-size:11px;color:#65636F">sorted by state, then tip age · click a row for node detail</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="background:#0D0D12;color:#9B97A8;font-size:11px;text-align:left">
+            <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08)">node</th>
+            <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08)">state <span style="color:#65636F">↓</span></th>
+            <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">seen</th>
+            <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08)">zebrad</th>
+            <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08)">network</th>
+            <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">tip</th>
+            <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">tip age</th>
+            <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">peers</th>
+            <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">rpc</th>
+            <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">mempool</th>
+            <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">log lag</th>
+            <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08)">open</th>
+          </tr>
+        </thead>
+        <tbody style="font-family:'JetBrains Mono',monospace">
+          <tr onClick="{{ goNode }}" style="cursor:pointer;height:32px" style-hover="background:#1A1A22">
+            <td style="padding:0 12px;font-family:'General Sans',sans-serif;font-weight:500;border-bottom:1px solid rgba(160,150,200,0.08)">foundry-pool-1</td>
+            <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08)"><span style="display:inline-flex;align-items:center;gap:6px;padding:1px 7px;border-radius:6px;background:rgba(239,68,68,0.16);color:#EF4444;font-family:'General Sans',sans-serif"><span style="width:6px;height:6px;border-radius:50%;background:#EF4444"></span>critical</span></td>
+            <td style="padding:0 12px;text-align:right;border-bottom:1px solid rgba(160,150,200,0.08)">3s</td>
+            <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08)">v6.3.0</td>
+            <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);color:#9B97A8">Mainnet</td>
+            <td style="padding:0 12px;text-align:right;border-bottom:1px solid rgba(160,150,200,0.08)">3011882</td>
+            <td style="padding:0 12px;text-align:right;border-bottom:1px solid rgba(160,150,200,0.08);color:#EF4444">12m 30s</td>
+            <td style="padding:0 12px;text-align:right;border-bottom:1px solid rgba(160,150,200,0.08);color:#F59E0B">2</td>
+            <td style="padding:0 12px;text-align:right;border-bottom:1px solid rgba(160,150,200,0.08)">41 ms</td>
+            <td style="padding:0 12px;text-align:right;border-bottom:1px solid rgba(160,150,200,0.08)">3</td>
+            <td style="padding:0 12px;text-align:right;border-bottom:1px solid rgba(160,150,200,0.08)">15 ms</td>
+            <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08)"><span style="display:inline-flex;align-items:center;gap:5px;padding:1px 6px;border-radius:4px;background:rgba(239,68,68,0.16);color:#EF4444;font-size:11px">tip_stalled</span></td>
+          </tr>
+          <tr onClick="{{ goNode }}" style="cursor:pointer;height:32px" style-hover="background:#1A1A22">
+            <td style="padding:0 12px;font-family:'General Sans',sans-serif;font-weight:500;border-bottom:1px solid rgba(160,150,200,0.08)">bitgo-hot-2</td>
+            <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08)"><span style="display:inline-flex;align-items:center;gap:6px;padding:1px 7px;border-radius:6px;background:rgba(16,185,129,0.16);color:#10B981;font-family:'General Sans',sans-serif"><span style="width:6px;height:6px;border-radius:50%;background:#10B981"></span>ok</span></td>
+            <td style="padding:0 12px;text-align:right;border-bottom:1px solid rgba(160,150,200,0.08)">5s</td>
+            <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08)">v6.3.0</td>
+            <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);color:#9B97A8">Mainnet</td>
+            <td style="padding:0 12px;text-align:right;border-bottom:1px solid rgba(160,150,200,0.08)">3011894</td>
+            <td style="padding:0 12px;text-align:right;border-bottom:1px solid rgba(160,150,200,0.08)">48s</td>
+            <td style="padding:0 12px;text-align:right;border-bottom:1px solid rgba(160,150,200,0.08)">11</td>
+            <td style="padding:0 12px;text-align:right;border-bottom:1px solid rgba(160,150,200,0.08)">9 ms</td>
+            <td style="padding:0 12px;text-align:right;border-bottom:1px solid rgba(160,150,200,0.08)">27</td>
+            <td style="padding:0 12px;text-align:right;border-bottom:1px solid rgba(160,150,200,0.08)">12 ms</td>
+            <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);color:#65636F">—</td>
+          </tr>
+          <tr onClick="{{ goNode }}" style="cursor:pointer;height:32px;color:#65636F" style-hover="background:#1A1A22">
+            <td style="padding:0 12px;font-family:'General Sans',sans-serif;font-weight:500;color:#9B97A8">pool-eu-3</td>
+            <td style="padding:0 12px"><span style="display:inline-flex;align-items:center;gap:6px;padding:1px 7px;border-radius:6px;background:rgba(163,90,94,0.18);color:#C4797D;font-family:'General Sans',sans-serif"><span style="width:6px;height:6px;border-radius:50%;border:1px solid #C4797D;box-sizing:border-box"></span>quiet</span></td>
+            <td style="padding:0 12px;text-align:right;color:#C4797D">4m 12s ago</td>
+            <td style="padding:0 12px">v6.2.3</td>
+            <td style="padding:0 12px">Mainnet</td>
+            <td style="padding:0 12px;text-align:right">—</td>
+            <td style="padding:0 12px;text-align:right">—</td>
+            <td style="padding:0 12px;text-align:right">—</td>
+            <td style="padding:0 12px;text-align:right">—</td>
+            <td style="padding:0 12px;text-align:right">—</td>
+            <td style="padding:0 12px;text-align:right">—</td>
+            <td style="padding:0 12px"><span style="display:inline-flex;align-items:center;gap:5px;padding:1px 6px;border-radius:4px;background:rgba(245,158,11,0.16);color:#F59E0B;font-size:11px">heartbeat_lost <span style="font-size:10px">✓</span></span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:baseline;gap:12px"><span style="font-size:15px;font-weight:500">Open incidents</span><span style="font-size:12px;color:#65636F">ordered by age · unacknowledged first</span></div>
+      <div style="border:1px solid rgba(160,150,200,0.08);border-radius:8px;background:#14141A;overflow:hidden">
+        <div style="display:grid;grid-template-columns:72px 100px 130px minmax(0,1fr) 150px 110px auto;gap:12px;padding:6px 12px;border-bottom:1px solid rgba(160,150,200,0.08);border-left:2px solid transparent;background:#0D0D12;color:#9B97A8;font-size:11px"><span>severity</span><span>detector</span><span>node</span><span>title</span><span>age</span><span>status</span><span style="justify-self:end">actions</span></div>
+        <sc-for list="{{ incidents }}" as="i" hint-placeholder-count="2">
+          <div style="display:grid;grid-template-columns:72px 100px 130px minmax(0,1fr) 150px 110px auto;align-items:center;gap:12px;padding:0 12px;height:36px;border-bottom:1px solid rgba(160,150,200,0.08);background:{{ i.rowBg }};border-left:2px solid {{ i.rowEdge }}">
+            <span style="display:inline-flex;align-items:center;gap:5px;padding:1px 6px;border-radius:4px;background:{{ i.sevBg }};color:{{ i.sevFg }};font-size:11px;justify-self:start">{{ i.severity }}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ i.detector }}</span>
+            <a href="Zero%20Node.dc.html" style="font-weight:500;color:#E8E6F0">{{ i.node }}</a>
+            <span style="color:#9B97A8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ i.title }}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:{{ i.ageColor }}">{{ i.ageLabel }}</span>
+            <span style="font-size:11px;color:{{ i.statusColor }}">{{ i.status }}</span>
+            <div style="display:flex;gap:4px;justify-self:end">
+              <button onClick="{{ i.ack }}" disabled="{{ i.acked }}" style="border:1px solid rgba(160,150,200,0.14);background:#0D0D12;color:{{ i.ackFg }};border-radius:6px;padding:2px 8px;font-size:12px">Ack</button>
+              <button onClick="{{ i.respond }}" disabled="{{ i.responded }}" style="border:1px solid rgba(160,150,200,0.14);background:#0D0D12;color:{{ i.respFg }};border-radius:6px;padding:2px 8px;font-size:12px">Responded</button>
+              <button onClick="{{ i.close }}" style="border:1px solid rgba(160,150,200,0.14);background:#0D0D12;color:#9B97A8;border-radius:6px;padding:2px 8px;font-size:12px">Close</button>
+              <a href="Zero%20Incident.dc.html" style="padding:2px 8px;font-size:12px">open →</a>
+            </div>
+          </div>
+        </sc-for>
+        <sc-if value="{{ noOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:24px;text-align:center;color:#65636F;font-size:12px">No open incidents. Last cleared {{ clock }}.</div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;defaultWindow&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;1h&quot;,&quot;6h&quot;,&quot;24h&quot;,&quot;7d&quot;,&quot;30d&quot;],&quot;default&quot;:&quot;24h&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Overview&quot;},&quot;oldestUnackedStartS&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:271,&quot;min&quot;:0,&quot;max&quot;:3600,&quot;unit&quot;:&quot;s&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Overview&quot;},&quot;redAfterMin&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:10,&quot;min&quot;:1,&quot;max&quot;:60,&quot;unit&quot;:&quot;min&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Overview&quot;}}">
+class Component extends DCLogic {
+  state = { win: null, tick: 0, incidents: [
+    { id: 1, severity: 'critical', detector: 'tip_stalled', node: 'foundry-pool-1', title: 'No new block for 12m 30s', pagedAgo: 271, acked: false, responded: false },
+    { id: 2, severity: 'warning', detector: 'heartbeat_lost', node: 'pool-eu-3', title: 'No heartbeat from sidecar for 4m 12s', pagedAgo: 192, acked: true, ackedBy: 'aayush', responded: false },
+  ] };
+  componentDidMount() { this.t = setInterval(() => this.setState(s => ({ tick: s.tick + 1 })), 1000); }
+  componentWillUnmount() { clearInterval(this.t); }
+  fmt(s) { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60; if (h) return h + 'h ' + String(m).padStart(2, '0') + 'm'; if (m) return m + 'm ' + String(sec).padStart(2, '0') + 's'; return sec + 's'; }
+  bars(arr, below) { const w = 960 / 24, unit = 28, gap = 6; let d = ''; arr.forEach((v, i) => { if (!v) return; const base = below[i] * unit; d += `M${(i * w + gap).toFixed(1)} ${(89 - base - v * unit).toFixed(1)}h${(w - gap * 2).toFixed(1)}v${v * unit}h-${(w - gap * 2).toFixed(1)}z`; }); return d; }
+  renderVals() {
+    const { tick, incidents } = this.state;
+    const win = this.state.win || this.props.defaultWindow || '24h';
+    const threshold = (this.props.redAfterMin ?? 10) * 60;
+    const start = this.props.oldestUnackedStartS ?? 271;
+    const wins = {};
+    ['1h', '6h', '24h', '7d', '30d'].forEach(w => { wins['bg' + w] = w === win ? '#1A1A22' : 'transparent'; wins['fg' + w] = w === win ? '#E8E6F0' : '#9B97A8'; wins['set' + w] = () => this.setState({ win: w }); });
+    const open = incidents;
+    const unacked = open.filter(i => !i.acked);
+    const oldest = unacked.length ? Math.max(...unacked.map(i => (i.id === 1 ? start : i.pagedAgo) + tick)) : 0;
+    const oldestColor = !unacked.length ? '#10B981' : oldest > threshold ? '#EF4444' : '#F59E0B';
+    const now = new Date(); const clock = now.toISOString().slice(11, 19);
+    const crit = [0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1];
+    const warn = [0,1,0,0,0,0,1,0,0,1,0,1,0,0,1,0,0,1,0,0,1,0,0,0];
+    const info = [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0];
+    const sev = { critical: ['rgba(239,68,68,0.16)', '#EF4444'], warning: ['rgba(245,158,11,0.16)', '#F59E0B'], info: ['rgba(59,130,246,0.16)', '#3B82F6'] };
+    const rows = open.map(i => {
+      const age = (i.id === 1 ? start : i.pagedAgo) + tick;
+      const upd = p => this.setState(s => ({ incidents: s.incidents.map(x => x.id === i.id ? { ...x, ...p } : x) }));
+      return { ...i, sevBg: sev[i.severity][0], sevFg: sev[i.severity][1],
+        rowBg: i.acked ? 'transparent' : 'rgba(239,68,68,0.06)', rowEdge: i.acked ? 'transparent' : '#EF4444',
+        ageLabel: 'paged ' + this.fmt(age) + ' ago', ageColor: i.acked ? '#9B97A8' : (age > threshold ? '#EF4444' : '#E8E6F0'),
+        status: i.responded ? 'responded · ' + (i.ackedBy || 'you') : i.acked ? 'acked · ' + (i.ackedBy || 'you') : 'unacknowledged',
+        statusColor: i.acked ? '#9B97A8' : '#EF4444', ackFg: i.acked ? '#65636F' : '#E8E6F0', respFg: i.responded ? '#65636F' : '#E8E6F0',
+        ack: () => upd({ acked: true, ackedBy: 'you' }), respond: () => upd({ acked: true, ackedBy: i.ackedBy || 'you', responded: true }),
+        close: () => this.setState(s => ({ incidents: s.incidents.filter(x => x.id !== i.id) })) };
+    }).sort((a, b) => (a.acked - b.acked) || (b.pagedAgo - a.pagedAgo));
+    return { ...wins, clock, updated: (tick % 5) + 's ago', openCount: open.length, unackedCount: unacked.length, unackedColor: unacked.length ? '#EF4444' : '#E8E6F0',
+      oldestUnacked: unacked.length ? this.fmt(oldest) : '—', oldestColor, oldestNote: unacked.length ? (oldest > threshold ? 'past ' + (threshold / 60) + 'm threshold' : 'red past ' + (threshold / 60) + 'm') : 'all acknowledged',
+      critBars: this.bars(crit, warn.map((w, i) => w + info[i])), warnBars: this.bars(warn, info), infoBars: this.bars(info, info.map(() => 0)),
+      incidents: rows, noOpen: !open.length, goNode: () => { window.location.href = 'Zero%20Node.dc.html'; } };
+  }
+}
+</script>
+</body>
+</html>

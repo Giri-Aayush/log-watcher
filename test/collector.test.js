@@ -83,6 +83,7 @@ test('heartbeats build a per-node series, a fleet row, and availability; silence
   const node = a.perNode.find((n) => n.label === 'pool-1');
   assert.equal(node.open, 1);
   assert.ok(node.availability < 1 && node.availability > 0);
+  assert.equal(a.availability, node.availability); // one node: fleet == node
 
   h.advance(2 * MIN);
   h.store.sweepQuiet();
