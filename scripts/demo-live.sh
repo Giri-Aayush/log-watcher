@@ -47,7 +47,7 @@ start_sidecar() {
   LW_LABEL="$2" LW_SOURCE=file LW_LOG_FILE="$DIR/zebrad.log" \
   LW_RPC_URL="http://127.0.0.1:$RPC_PORT" LW_RPC_COOKIE="$DIR/.cookie" \
   LW_POLL_MS=3000 LW_GBT_POLL_MS=10000 LW_RPC_FAIL_COUNT=2 LW_TIP_STALL_MIN=1 LW_MIN_PEERS=0 LW_BLOCK_LAG_S=0 LW_TRANSIENT_COOLDOWN_S=15 \
-  LW_WEBHOOK_URL="http://127.0.0.1:$COLLECTOR_PORT/ingest" LW_BUNDLE_DIR="$DIR/bundles-$1" LW_PORT="$3" \
+  LW_WEBHOOK_URL="http://127.0.0.1:$COLLECTOR_PORT/ingest" LW_BUNDLE_DIR="$DIR/bundles-$1" LW_PORT="$3" LW_DASHBOARD_URL="http://localhost:$3" LW_SHARE_HOST=true \
   nohup node server.js > "$DIR/$1.out" 2>&1 &
   echo $! > "$DIR/$1.pid"
 }

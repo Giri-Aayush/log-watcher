@@ -110,10 +110,15 @@ The page itself is one HTTP POST to a loopback Signal bridge: sub-second.
   the last five), and the hostname is not sent unless `LW_SHARE_HOST=true`. Zebra
   itself already redacts peer addresses in its log. Every exported bundle states
   the policy it was produced under.
-- **A human sends every message to an operator.** With `ANTHROPIC_API_KEY` set,
-  each non-info alert gets a first-pass triage draft (probable cause, what to
-  check, a regtest repro sketch, a message to the operator) attached in the
-  dashboard. It is a draft. Nothing is sent from it.
+- **A human sends every message to an operator.** On the collector, "Ask Claude
+  for an analysis" on an incident runs the model over the incident, the
+  page-time bundle, the other nodes on the same network, this node's history
+  and the last hour of heartbeats, and attaches a draft: assessment (node-local,
+  network-wide, or expected on this network), probable cause, what to check, a
+  regtest repro, a message to the operator, confidence. Credentials are Zero's
+  (`ANTHROPIC_API_KEY` in the collector's environment), never the customer's.
+  The sidecar can do a bundle-only version on the box if it is given a key. In
+  both cases it is a draft. Nothing is sent from it.
 
 ## Run it
 

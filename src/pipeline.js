@@ -25,6 +25,12 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
   const eventRing = new Ring(200);
   const counters = { lines: 0, events: 0, polls: 0, pages: 0 };
   const outbox = new Outbox({ url: cfg.sinks.webhookUrl, now });
+  outbox.on('delivered', (seq) => {
+    const a = alerts.history.find((x) => x.outboxSeq === seq);
+    if (!a) return;
+    a.deliveredAt = now(); // Zero has this page; the operator's screen can say so
+    bus.emit('update', a);
+  });
   outbox.on('failing', (why) => bus.emit('error', new Error(`collector unreachable (${why}); queueing`)));
   outbox.on('recovered', (n) => bus.emit('notice', `collector back after ${n} failed attempts; queue flushed`));
   const detectors = new Detectors(cfg, { now });
@@ -43,13 +49,33 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
   function sidecarInfo() {
     return {
       version: require('../package.json').version,
+      label: cfg.label,
       host: os.hostname(),
       pid: process.pid,
       source: sourceLabel(),
       rpcUrl: cfg.rpc.url,
+      pollMs: cfg.rpc.pollMs,
+      gbtPollMs: cfg.rpc.gbtPollMs,
+      dashboardUrl: cfg.dashboardUrl,
       thresholds: cfg.thresholds,
+      share: cfg.share,
       startedAt: detectors.state.startedAt,
     };
+  }
+
+  // What the collector may know about this process: the share policy applies
+  // to heartbeats exactly as it does to bundles.
+  function sidecarInfoForExport() {
+    const info = sidecarInfo();
+    if (!cfg.share.host) delete info.host;
+    return info;
+  }
+
+  // Where this sidecar's page is, for the "← console" link and for Zero: the
+  // collector's origin is the webhook's origin.
+  function consoleUrl() {
+    if (!cfg.sinks.webhookUrl) return null;
+    try { return new URL(cfg.sinks.webhookUrl).origin; } catch { return null; }
   }
 
   detectors.on('alert', (a) => alerts.raise(a));
@@ -178,7 +204,7 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
       phase: 'HEARTBEAT',
       label: cfg.label,
       at: now(),
-      sidecar: sidecarInfo(),
+      sidecar: sidecarInfoForExport(),
       node: s.node,
       tip: s.tip,
       peers: s.peers,
@@ -280,6 +306,8 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
       events: eventRing.last(logLines ? 60 : 0),
       counters: { ...counters, delivery: cfg.sinks.webhookUrl ? outbox.stats : null },
       startedAt: detectors.state.startedAt,
+      sidecar: sidecarInfo(),
+      consoleUrl: consoleUrl(),
     };
   }
 

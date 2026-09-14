@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+html,body{margin:0;background:#0A0A0F;color:#E8E6F0;font:400 13px/1.45 'General Sans',system-ui,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+a{color:#A78BFA;text-decoration:none}a:hover{text-decoration:underline}
+button{font:inherit;cursor:pointer}
+</style>
+</helmet>
+<div data-screen-label="Node detail" style="min-width:1024px;max-width:1440px;margin:0 auto;min-height:100vh;background:#0A0A0F;color:#E8E6F0">
+  <div style="height:44px;display:flex;align-items:center;gap:16px;padding:0 24px;border-bottom:1px solid rgba(160,150,200,0.08);background:#0D0D12;white-space:nowrap;overflow:hidden">
+    <div style="display:flex;align-items:baseline;gap:8px"><span style="font-weight:500;font-size:14px">Zero</span><span style="font-size:11px;color:#65636F">Shielded Labs</span></div>
+    <nav style="display:flex;gap:4px">
+      <a href="Zero%20Overview.dc.html" style="padding:4px 10px;border-radius:6px;color:#9B97A8;text-decoration:none">Overview</a>
+      <a href="Zero%20Incident.dc.html" style="padding:4px 10px;border-radius:6px;color:#9B97A8;text-decoration:none">Incident</a>
+      <a href="Zero%20Node.dc.html" style="padding:4px 10px;border-radius:6px;color:#E8E6F0;background:#1A1A22;text-decoration:none">Node</a>
+      <a href="Zero%20Sidecar.dc.html" style="padding:4px 10px;border-radius:6px;color:#9B97A8;text-decoration:none">Sidecar</a>
+      <a href="Zero%20Components.dc.html" style="padding:4px 10px;border-radius:6px;color:#9B97A8;text-decoration:none">Components</a>
+    </nav>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+      <span style="font-size:12px;color:#9B97A8">on call <span style="color:#E8E6F0">aayush</span></span>
+      <span style="display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:6px;background:rgba(239,68,68,0.16);color:#EF4444;font-size:12px"><span style="width:6px;height:6px;border-radius:50%;background:#EF4444"></span>1 critical open</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#9B97A8">{{ clock }} UTC</span>
+    </div>
+  </div>
+
+  <div style="padding:16px 24px 32px;display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#65636F"><a href="Zero%20Overview.dc.html" style="color:#9B97A8">Fleet</a><span>/</span><span>foundry-pool-1</span></div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;white-space:nowrap">
+      <span style="font-size:18px;font-weight:500;line-height:1.2">foundry-pool-1</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;padding:1px 7px;border-radius:6px;background:rgba(239,68,68,0.16);color:#EF4444;font-size:12px"><span style="width:6px;height:6px;border-radius:50%;background:#EF4444"></span>critical</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#9B97A8;display:flex;gap:14px"><span>Mainnet</span><span>zebrad v6.3.0</span><span>foundry-zc-01</span><span>seen <span style="color:#E8E6F0">{{ seen }}</span></span></span>
+      <span style="font-size:12px;color:#9B97A8">customer <span style="color:#E8E6F0">Foundry</span></span>
+      <div style="margin-left:auto;display:flex;border:1px solid rgba(160,150,200,0.08);border-radius:6px;overflow:hidden;background:#0D0D12">
+        <button onClick="{{ set1h }}" style="border:0;padding:3px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;background:{{ bg1h }};color:{{ fg1h }}">1h</button>
+        <button onClick="{{ set6h }}" style="border:0;padding:3px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;background:{{ bg6h }};color:{{ fg6h }}">6h</button>
+        <button onClick="{{ set24h }}" style="border:0;padding:3px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;background:{{ bg24h }};color:{{ fg24h }}">24h</button>
+        <button onClick="{{ set7d }}" style="border:0;padding:3px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;background:{{ bg7d }};color:{{ fg7d }}">7d</button>
+        <button onClick="{{ set30d }}" style="border:0;padding:3px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;background:{{ bg30d }};color:{{ fg30d }}">30d</button>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:rgba(160,150,200,0.08);border:1px solid rgba(160,150,200,0.08);border-radius:8px;overflow:hidden">
+      <div style="background:#14141A;padding:10px 14px 8px;display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:11px;color:#9B97A8">tip age</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#EF4444">12m 30s</span></div>
+        <svg viewBox="0 0 300 70" preserveAspectRatio="none" style="width:100%;height:70px;display:block">
+          <line x1="0" y1="69.5" x2="300" y2="69.5" stroke="rgba(160,150,200,0.14)"></line>
+          <line x1="0" y1="{{ tipThreshY }}" x2="300" y2="{{ tipThreshY }}" stroke="#EF4444" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke" opacity="0.7"></line>
+          <polyline points="{{ tipPts }}" fill="none" stroke="#9B97A8" stroke-width="1.2" vector-effect="non-scaling-stroke"></polyline>
+          <polyline points="{{ tipTail }}" fill="none" stroke="#EF4444" stroke-width="1.4" vector-effect="non-scaling-stroke"></polyline>
+        </svg>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#65636F;font-family:'JetBrains Mono',monospace"><span>{{ axisStart }}</span><span>stall ≥ 600s</span><span>now</span></div>
+      </div>
+      <div style="background:#14141A;padding:10px 14px 8px;display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:11px;color:#9B97A8">RPC latency</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px">41 ms</span></div>
+        <svg viewBox="0 0 300 70" preserveAspectRatio="none" style="width:100%;height:70px;display:block">
+          <line x1="0" y1="69.5" x2="300" y2="69.5" stroke="rgba(160,150,200,0.14)"></line>
+          <polyline points="{{ rpcPts }}" fill="none" stroke="#9B97A8" stroke-width="1.2" vector-effect="non-scaling-stroke"></polyline>
+          <path d="{{ rpcFails }}" stroke="#EF4444" stroke-width="1.5" vector-effect="non-scaling-stroke"></path>
+        </svg>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#65636F;font-family:'JetBrains Mono',monospace"><span>{{ axisStart }}</span><span><span style="color:#EF4444">|</span> 2 failures</span><span>now</span></div>
+      </div>
+      <div style="background:#14141A;padding:10px 14px 8px;display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:11px;color:#9B97A8">peers</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#F59E0B">2</span></div>
+        <svg viewBox="0 0 300 70" preserveAspectRatio="none" style="width:100%;height:70px;display:block">
+          <line x1="0" y1="69.5" x2="300" y2="69.5" stroke="rgba(160,150,200,0.14)"></line>
+          <line x1="0" y1="{{ peersMinY }}" x2="300" y2="{{ peersMinY }}" stroke="#F59E0B" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke" opacity="0.7"></line>
+          <polyline points="{{ peersPts }}" fill="none" stroke="#9B97A8" stroke-width="1.2" vector-effect="non-scaling-stroke"></polyline>
+        </svg>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#65636F;font-family:'JetBrains Mono',monospace"><span>{{ axisStart }}</span><span>min 3</span><span>now</span></div>
+      </div>
+      <div style="background:#14141A;padding:10px 14px 8px;display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:11px;color:#9B97A8">mempool</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px">3 txs</span></div>
+        <svg viewBox="0 0 300 70" preserveAspectRatio="none" style="width:100%;height:70px;display:block">
+          <line x1="0" y1="69.5" x2="300" y2="69.5" stroke="rgba(160,150,200,0.14)"></line>
+          <polyline points="{{ memPts }}" fill="none" stroke="#9B97A8" stroke-width="1.2" vector-effect="non-scaling-stroke"></polyline>
+        </svg>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#65636F;font-family:'JetBrains Mono',monospace"><span>{{ axisStart }}</span><span>max 61</span><span>now</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start">
+      <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+        <div style="border:1px solid rgba(160,150,200,0.08);border-radius:8px;background:#14141A;padding:8px 14px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center">
+          <span style="font-size:11px;color:#9B97A8;white-space:nowrap">log lag</span>
+          <svg viewBox="0 0 600 24" preserveAspectRatio="none" style="width:100%;height:24px;display:block"><polyline points="{{ lagPts }}" fill="none" stroke="#9B97A8" stroke-width="1" vector-effect="non-scaling-stroke"></polyline></svg>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:12px;white-space:nowrap">15 ms <span style="color:#65636F">· p95 31 ms</span></span>
+        </div>
+
+        <div style="border:1px solid rgba(160,150,200,0.08);border-radius:8px;background:#14141A;overflow:hidden">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid rgba(160,150,200,0.08)"><span style="font-size:12px;color:#9B97A8">incident history · {{ winLabel }}</span><span style="font-size:11px;color:#65636F;font-family:'JetBrains Mono',monospace;white-space:nowrap">5 incidents · 1 open</span></div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead>
+              <tr style="background:#0D0D12;color:#9B97A8;font-size:11px;text-align:left">
+                <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08)">sev</th>
+                <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08)">detector</th>
+                <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08)">onset</th>
+                <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">detect</th>
+                <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">ack</th>
+                <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">respond</th>
+                <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">resolve</th>
+                <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08)">by</th>
+                <th style="padding:6px 12px;font-weight:400;border-bottom:1px solid rgba(160,150,200,0.08)">status</th>
+              </tr>
+            </thead>
+            <tbody style="font-family:'JetBrains Mono',monospace">
+              <tr style="height:32px;background:rgba(239,68,68,0.06)" style-hover="background:#1A1A22">
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);border-left:2px solid #EF4444"><span style="display:inline-flex;padding:1px 6px;border-radius:4px;background:rgba(239,68,68,0.16);color:#EF4444;font-size:11px;font-family:'General Sans',sans-serif">critical</span></td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08)"><a href="Zero%20Incident.dc.html" style="color:#E8E6F0">tip_stalled</a></td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);color:#9B97A8">11:16:04</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">12m 29s</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right;color:#EF4444">{{ liveAck }}</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right;color:#65636F">—</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right;color:#65636F">—</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);color:#65636F;font-family:'General Sans',sans-serif">—</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);color:#EF4444;font-family:'General Sans',sans-serif">open · unacknowledged</td>
+              </tr>
+              <tr style="height:32px" style-hover="background:#1A1A22">
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);border-left:2px solid transparent"><span style="display:inline-flex;padding:1px 6px;border-radius:4px;background:rgba(245,158,11,0.16);color:#F59E0B;font-size:11px;font-family:'General Sans',sans-serif">warning</span></td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08)">peers_low</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);color:#9B97A8">11:22:00</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">4m 12s</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">1m 40s</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right;color:#65636F">—</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right;color:#65636F">—</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);font-family:'General Sans',sans-serif">aayush</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);color:#F59E0B;font-family:'General Sans',sans-serif">open · acknowledged</td>
+              </tr>
+              <tr style="height:32px;color:#9B97A8" style-hover="background:#1A1A22">
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);border-left:2px solid transparent"><span style="display:inline-flex;padding:1px 6px;border-radius:4px;background:rgba(160,150,200,0.10);color:#9B97A8;font-size:11px;font-family:'General Sans',sans-serif">warning</span></td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08)">peers_low</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08)">03:41:18</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">3s</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">9m 40s</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">22m</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">1h 05m</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);font-family:'General Sans',sans-serif">dana</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);font-family:'General Sans',sans-serif">resolved</td>
+              </tr>
+              <tr style="height:32px;color:#9B97A8" style-hover="background:#1A1A22">
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);border-left:2px solid transparent"><span style="display:inline-flex;padding:1px 6px;border-radius:4px;background:rgba(160,150,200,0.10);color:#9B97A8;font-size:11px;font-family:'General Sans',sans-serif">critical</span></td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08)">rpc_down</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08)">2026-09-13 22:08:51</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">10s</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">48s</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">6m</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);text-align:right">14m</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);font-family:'General Sans',sans-serif">aayush</td>
+                <td style="padding:0 12px;border-bottom:1px solid rgba(160,150,200,0.08);font-family:'General Sans',sans-serif">resolved · escalated ×1</td>
+              </tr>
+              <tr style="height:32px;color:#9B97A8" style-hover="background:#1A1A22">
+                <td style="padding:0 12px;border-left:2px solid transparent"><span style="display:inline-flex;padding:1px 6px;border-radius:4px;background:rgba(160,150,200,0.10);color:#9B97A8;font-size:11px;font-family:'General Sans',sans-serif">info</span></td>
+                <td style="padding:0 12px">sync_stalled</td>
+                <td style="padding:0 12px">2026-09-13 14:02:30</td>
+                <td style="padding:0 12px;text-align:right">1m</td>
+                <td style="padding:0 12px;text-align:right">2m 10s</td>
+                <td style="padding:0 12px;text-align:right;color:#65636F">—</td>
+                <td style="padding:0 12px;text-align:right">31m</td>
+                <td style="padding:0 12px;font-family:'General Sans',sans-serif">dana</td>
+                <td style="padding:0 12px;font-family:'General Sans',sans-serif">closed by hand · "false positive, reindex"</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+        <div style="border:1px solid rgba(160,150,200,0.08);border-radius:8px;background:#14141A;overflow:hidden">
+          <div style="padding:8px 14px;border-bottom:1px solid rgba(160,150,200,0.08);font-size:12px;color:#9B97A8">sidecar</div>
+          <div style="display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:16px;row-gap:5px;padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:12px">
+            <span style="color:#9B97A8">version</span><span>zero-sidecar 0.4.2</span>
+            <span style="color:#9B97A8">host</span><span>foundry-zc-01 · 10.40.2.17</span>
+            <span style="color:#9B97A8">source</span><span>docker <span style="color:#65636F">· container zebrad</span></span>
+            <span style="color:#9B97A8">rpc</span><span>127.0.0.1:8232</span>
+            <span style="color:#9B97A8">heartbeat</span><span>every 10s · last {{ seen }}</span>
+            <span style="color:#9B97A8">uptime</span><span>11d 04h</span>
+          </div>
+        </div>
+        <div style="border:1px solid rgba(160,150,200,0.08);border-radius:8px;background:#14141A;overflow:hidden">
+          <div style="padding:8px 14px;border-bottom:1px solid rgba(160,150,200,0.08);font-size:12px;color:#9B97A8">thresholds in effect</div>
+          <div style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:14px;row-gap:5px;padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:12px">
+            <span>tip_stalled</span><span style="color:#9B97A8">tip age ≥ 600s</span><span style="color:#EF4444">critical</span>
+            <span>tip_rewound</span><span style="color:#9B97A8">height decreases</span><span style="color:#EF4444">critical</span>
+            <span>rpc_down</span><span style="color:#9B97A8">3 failures / 30s</span><span style="color:#EF4444">critical</span>
+            <span>peers_low</span><span style="color:#9B97A8">peers &lt; 3 for 120s</span><span style="color:#F59E0B">warning</span>
+            <span>sync_stalled</span><span style="color:#9B97A8">no progress 300s</span><span style="color:#F59E0B">warning</span>
+            <span>log_lag</span><span style="color:#9B97A8">lag &gt; 5000ms</span><span style="color:#3B82F6">info</span>
+            <span>quiet</span><span style="color:#9B97A8">no heartbeat 60s</span><span style="color:#C4797D">quiet</span>
+          </div>
+          <div style="padding:8px 14px;border-top:1px solid rgba(160,150,200,0.08);font-size:11px;color:#65636F">from <span style="font-family:'JetBrains Mono',monospace">/etc/zero/sidecar.toml</span> · <a href="#" style="font-size:11px">edit</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;defaultWindow&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;1h&quot;,&quot;6h&quot;,&quot;24h&quot;,&quot;7d&quot;,&quot;30d&quot;],&quot;default&quot;:&quot;6h&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { win: null, tick: 0 };
+  componentDidMount() { this.t = setInterval(() => this.setState(s => ({ tick: s.tick + 1 })), 1000); }
+  componentWillUnmount() { clearInterval(this.t); }
+  fmt(s) { const m = Math.floor(s / 60), sec = s % 60; return m ? m + 'm ' + String(sec).padStart(2, '0') + 's' : sec + 's'; }
+  rnd(i) { const x = Math.sin(i * 12.9898 + 7.3) * 43758.5453; return x - Math.floor(x); }
+  renderVals() {
+    const win = this.state.win || this.props.defaultWindow || '6h';
+    const wins = {}; ['1h', '6h', '24h', '7d', '30d'].forEach(w => { wins['bg' + w] = w === win ? '#1A1A22' : 'transparent'; wins['fg' + w] = w === win ? '#E8E6F0' : '#9B97A8'; wins['set' + w] = () => this.setState({ win: w }); });
+    const N = 120, W = 300, H = 70;
+    const pts = (fn, top) => Array.from({ length: N }, (_, i) => (i * W / (N - 1)).toFixed(1) + ',' + (H - 2 - Math.min(1, fn(i) / top) * (H - 8)).toFixed(1)).join(' ');
+    // tip age: sawtooth (blocks ~75s), final stall climbing to 750s
+    const tipTop = 800; const tip = i => i < 100 ? ((i * 37) % 11) * 14 + 10 + this.rnd(i) * 20 : (i - 99) * 36;
+    const tipAll = pts(tip, tipTop).split(' ');
+    const rpc = i => 25 + this.rnd(i) * 14 + (i > 96 ? 12 : 0) + (i > 60 && i < 66 ? 30 : 0);
+    const fails = [63, 64].map(i => { const x = (i * W / (N - 1)).toFixed(1); return `M${x} 6V${H - 2}`; }).join('');
+    const peers = i => i < 84 ? 8 + Math.round(this.rnd(i) * 3) : i < 92 ? 4 : 2;
+    const mem = i => 10 + this.rnd(i * 3) * 40 + (i > 100 ? -20 : 0);
+    const lag = i => 12 + this.rnd(i * 7) * 8 + (i % 37 === 0 ? 15 : 0);
+    const axis = { '1h': '−1h', '6h': '−6h', '24h': '−24h', '7d': '−7d', '30d': '−30d' }[win];
+    return { ...wins, clock: new Date().toISOString().slice(11, 19), seen: (3 + (this.state.tick % 10)) + 's', winLabel: win, axisStart: axis,
+      liveAck: this.fmt(271 + this.state.tick) + ' …',
+      tipPts: tipAll.slice(0, 100).join(' '), tipTail: tipAll.slice(99).join(' '), tipThreshY: (H - 2 - 600 / tipTop * (H - 8)).toFixed(1),
+      rpcPts: pts(rpc, 90), rpcFails: fails,
+      peersPts: pts(peers, 14), peersMinY: (H - 2 - 3 / 14 * (H - 8)).toFixed(1),
+      memPts: pts(mem, 70),
+      lagPts: Array.from({ length: N }, (_, i) => (i * 600 / (N - 1)).toFixed(1) + ',' + (22 - Math.min(1, lag(i) / 40) * 20).toFixed(1)).join(' ') };
+  }
+}
+</script>
+</body>
+</html>
