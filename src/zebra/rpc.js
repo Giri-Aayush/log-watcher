@@ -6,8 +6,9 @@ const fs = require('fs');
 //
 // Auth is Zebra's cookie file (rpc.enable_cookie_auth, on by default since
 // 2.x): the file holds "__cookie__:<token>" and is sent as HTTP Basic. The
-// cookie is regenerated on every node start, so a 401 re-reads it once and
-// retries rather than failing until the sidecar restarts.
+// cookie is regenerated on every node start, and Zebra answers a stale one by
+// closing the connection rather than with a 401, so the file is re-read
+// whenever its mtime changes and after any network error.
 class RpcError extends Error {
   constructor(message, { kind, code, ms, method }) {
     super(message);
@@ -24,17 +25,27 @@ class ZebraRpc {
     this.cookieFile = cookieFile;
     this.timeoutMs = timeoutMs;
     this.auth = user ? `${user}:${pass || ''}` : null;
+    this.cookieMtime = null;
     this.id = 0;
   }
 
   readCookie() {
     if (!this.cookieFile) return;
+    const st = fs.statSync(this.cookieFile);
+    if (st.mtimeMs === this.cookieMtime) return;
     this.auth = fs.readFileSync(this.cookieFile, 'utf8').trim();
+    this.cookieMtime = st.mtimeMs;
   }
 
   headers() {
     const h = { 'content-type': 'application/json' };
-    if (this.auth === null && this.cookieFile) this.readCookie();
+    if (this.cookieFile) {
+      try {
+        this.readCookie();
+      } catch {
+        // the node is (re)starting and has not written it yet; send what we have
+      }
+    }
     if (this.auth) h.authorization = `Basic ${Buffer.from(this.auth).toString('base64')}`;
     return h;
   }
@@ -54,12 +65,16 @@ class ZebraRpc {
     } catch (err) {
       const ms = Date.now() - started;
       const kind = err.name === 'AbortError' ? 'timeout' : 'network';
-      throw new RpcError(`${method}: ${kind === 'timeout' ? `timed out after ${ms}ms` : err.message}`, { kind, ms, method });
+      this.cookieMtime = null; // a closed connection may be a stale cookie: re-read next time
+      // fetch() says "fetch failed"; the useful part (ECONNREFUSED, ECONNRESET) is in cause.
+      const why = kind === 'timeout' ? `timed out after ${ms}ms` : (err.cause && err.cause.message) || err.message;
+      throw new RpcError(`${method}: ${why}`, { kind, ms, method });
     } finally {
       clearTimeout(timer);
     }
     const ms = Date.now() - started;
     if (res.status === 401 && this.cookieFile && retryAuth) {
+      this.cookieMtime = null;
       this.readCookie();
       return this.call(method, params, { retryAuth: false });
     }

@@ -85,6 +85,15 @@ test('peers: warning after two low polls, critical at zero, resolves when back',
   assert.equal(h.resolved[0].key, 'peers_low');
 });
 
+test('tip going backwards over RPC is reported', () => {
+  const h = harness();
+  h.ok({ blockchain: { blocks: 100, bestblockhash: 'a', chain: 'test' } });
+  h.ok({ blockchain: { blocks: 98, bestblockhash: 'b', chain: 'test' } });
+  assert.deepEqual(h.keys(), ['tip_rewound']);
+  assert.deepEqual(h.raised[0].evidence, { from: 100, to: 98, hash: 'b' });
+  assert.equal(h.d.state.tip.height, 98);
+});
+
 test('node restart, version change and getinfo.errors are transient notifications', () => {
   const h = harness();
   h.feed(lines.banner);

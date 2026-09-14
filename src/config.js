@@ -77,7 +77,7 @@ const envMap = {
   LW_RPC_FAIL_COUNT: 'thresholds.rpcFailCount', LW_ERROR_BURST: 'thresholds.errorBurst', LW_ERROR_WINDOW_S: 'thresholds.errorWindowS',
   LW_MEMPOOL_MAX: 'thresholds.mempoolMax', LW_BIG_BLOCK_TXS: 'thresholds.bigBlockTxs', LW_BIG_BLOCK_BYTES: 'thresholds.bigBlockBytes',
   LW_BLOCK_LAG_S: 'thresholds.blockLagS', LW_EOS_WARN_BLOCKS: 'thresholds.eosWarnBlocks',
-  LW_COOLDOWN_MIN: 'alerts.cooldownMin', LW_BUNDLE_DIR: 'alerts.bundleDir', LW_BUNDLE_LOG_LINES: 'alerts.bundleLogLines', LW_HEARTBEAT: 'alerts.heartbeat',
+  LW_COOLDOWN_MIN: 'alerts.cooldownMin', LW_BUNDLE_DIR: 'alerts.bundleDir', LW_BUNDLE_LOG_LINES: 'alerts.bundleLogLines', LW_HEARTBEAT: 'alerts.heartbeat', LW_TRANSIENT_COOLDOWN_S: 'alerts.transientCooldownS',
   LW_WEBHOOK_URL: 'sinks.webhookUrl', LW_DISCORD_WEBHOOK: 'sinks.discordWebhook',
   LW_TELEGRAM_TOKEN: 'sinks.telegramToken', LW_TELEGRAM_CHAT: 'sinks.telegramChat',
   LW_SIGNAL_URL: 'sinks.signalUrl', LW_SIGNAL_NUMBER: 'sinks.signalNumber', LW_SIGNAL_RECIPIENT: 'sinks.signalRecipient',

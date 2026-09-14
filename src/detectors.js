@@ -67,7 +67,10 @@ class Detectors extends EventEmitter {
     const now = ctx.replay ? ctx.at : this.now();
     switch (ev.type) {
       case 'block_committed':
-        this.newTip(ev.height, ev.hash, now, ev.mined ? 'mined' : 'gossip');
+        // Zebra re-gossips its restored blocks on startup; those are not new tips.
+        if (this.state.tip.height == null || ev.height > this.state.tip.height) {
+          this.newTip(ev.height, ev.hash, now, ev.mined ? 'mined' : 'gossip');
+        }
         break;
 
       case 'sync_progress':
@@ -169,7 +172,7 @@ class Detectors extends EventEmitter {
     if (!sample.ok) {
       r.ok = false;
       r.failures++;
-      r.lastError = sample.error;
+      r.lastError = { message: sample.error.message, kind: sample.error.kind }; // Error.message is not enumerable
       r.ms = sample.ms;
       r.at = now;
       if (r.failures >= this.t.rpcFailCount) {
@@ -198,9 +201,21 @@ class Detectors extends EventEmitter {
 
     const bc = sample.blockchain;
     if (bc) {
-      if (this.state.tip.height == null || bc.blocks > this.state.tip.height) {
+      // RPC is authoritative in both directions (a restart can come back on a
+      // shorter chain); log events only ever move the tip forward.
+      const prevHeight = this.state.tip.height;
+      if (prevHeight == null || bc.blocks !== prevHeight) {
         this.newTip(bc.blocks, bc.bestblockhash, now, 'rpc');
-      } else if (bc.blocks === this.state.tip.height && !this.state.tip.hash && bc.bestblockhash) {
+        if (prevHeight != null && bc.blocks < prevHeight) {
+          // Non-finalized blocks live in memory; a SIGKILL or OOM-kill loses
+          // them and the node comes back on a shorter chain. A miner on this
+          // node just mined on a stale tip.
+          this.raise('tip_rewound', 'warning', `Tip went backwards: ${prevHeight} → ${bc.blocks}`,
+            `The node reports height ${bc.blocks}; it was ${prevHeight}. After a restart this means the non-finalized state was not backed up (unclean shutdown).`,
+            { from: prevHeight, to: bc.blocks, hash: bc.bestblockhash },
+            { transient: true, suggest: 'Check how the node stopped (OOM-kill? SIGKILL?) and state.should_backup_non_finalized_state in zebrad.toml.' });
+        }
+      } else if (!this.state.tip.hash && bc.bestblockhash) {
         this.state.tip.hash = bc.bestblockhash;
       }
       this.state.blockchain = {
