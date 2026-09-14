@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const { incidentReport } = require('./report');
+const { makeIncidentTriage, triageAvailable } = require('./triage');
 
 // The Zero-side end of the sidecar's webhook, and the incident record.
 //
@@ -239,6 +240,48 @@ class Store {
     }
   }
 
+  // Everything the analysis should see, trimmed: the incident, the page-time
+  // bundle (logs already filtered by the sidecar's share policy), the other
+  // nodes on the same network right now, this node's recent history, and the
+  // last hour of heartbeats summarised.
+  triageContext(inc) {
+    const now = this.now();
+    let bundle = null;
+    try { bundle = JSON.parse(fs.readFileSync(path.join(this.dir, inc.bundleFile), 'utf8')); } catch { /* network incident */ }
+    const node = this.nodes.get(inc.label);
+    const network = node && node.network;
+    const fleet = this.fleet().filter((n) => n.label !== inc.label && (!network || n.network === network)).map((n) => ({
+      label: n.label, state: n.state, tip: n.tip && n.tip.height, tipAgeS: n.tipAgeS, peers: n.peers,
+      rpcMs: n.rpc && n.rpc.ms, rpcOk: n.rpc && n.rpc.ok, open: n.open.map((o) => o.key),
+    }));
+    const history = [...this.incidents.values()]
+      .filter((i) => i.label === inc.label && i.id !== inc.id && !i.transient)
+      .sort((a, b) => b.pagedAt - a.pagedAt).slice(0, 10)
+      .map((i) => ({ key: i.key, severity: i.severity, pagedAt: new Date(i.pagedAt).toISOString(), resolved: !!i.resolvedAt, resolvedDetail: i.resolvedDetail, closedBy: i.closedBy }));
+    const hour = this.seriesFor(inc.label, { windowMs: 3600e3 });
+    const ms = hour.map((s) => s.rpcMs).filter((x) => typeof x === 'number').sort((a, b) => a - b);
+    const series = hour.length ? {
+      samples: hour.length,
+      rpcP95Ms: ms.length ? ms[Math.min(ms.length - 1, Math.ceil(0.95 * ms.length) - 1)] : null,
+      rpcFailures: hour.filter((s) => s.rpcOk === false).length,
+      tipAgeMaxS: Math.max(...hour.map((s) => s.tipAgeS ?? 0)),
+      peersMin: Math.min(...hour.map((s) => s.peers ?? Infinity)),
+      mempoolMax: Math.max(...hour.map((s) => s.mempool ?? 0)),
+    } : null;
+    const { notes, updates, ...rest } = inc;
+    return {
+      now: new Date(now).toISOString(),
+      incident: { ...rest, onsetAt: new Date(inc.onsetAt).toISOString(), pagedAt: new Date(inc.pagedAt).toISOString(), ackedAt: inc.ackedAt && new Date(inc.ackedAt).toISOString(), resolvedAt: inc.resolvedAt && new Date(inc.resolvedAt).toISOString(), engineerNotes: notes.filter((n) => n.text).map((n) => `${n.action} by ${n.by}: ${n.text}`) },
+      bundle: bundle && {
+        node: bundle.node, tip: bundle.tip, sync: bundle.sync, peers: bundle.peers, peerSummary: bundle.peerSummary, mempool: bundle.mempool,
+        rpc: bundle.rpc && { ok: bundle.rpc.ok, ms: bundle.rpc.ms, failures: bundle.rpc.failures, lastError: bundle.rpc.lastError },
+        gbt: bundle.gbt, lastBlock: bundle.lastBlock, logDelayMs: bundle.logDelayMs, sidecar: bundle.sidecar && { version: bundle.sidecar.version, source: bundle.sidecar.source, thresholds: bundle.sidecar.thresholds },
+        share: bundle.share, logs: (bundle.logs || []).slice(-40),
+      },
+      network, otherNodesOnNetwork: fleet, recentHistory: history, lastHour: series,
+    };
+  }
+
   act(id, action, { by = 'unknown', text = null } = {}) {
     const inc = this.incidents.get(id);
     if (!inc) return null;
@@ -259,6 +302,8 @@ class Store {
       case 'report':
         inc.reportSentAt = now;
         inc.reportSentBy = by;
+        break;
+      case 'triage':
         break;
       default:
         throw new Error(`unknown action ${action}`);
@@ -381,10 +426,34 @@ function parseWindow(q) {
   return WINDOWS[q] || WINDOWS['24h'];
 }
 
-function createCollector({ dir, quietMs = 60000, now = Date.now, publicDir = path.join(__dirname, '..', 'public') } = {}) {
+function createCollector({ dir, quietMs = 60000, now = Date.now, publicDir = path.join(__dirname, '..', 'public'), triage = null } = {}) {
   const store = new Store(dir, { now, quietMs });
   const app = express();
   app.use(express.json({ limit: '10mb' }));
+  // Analysis on Zero's side: needs Zero's Anthropic credentials in this
+  // process, never the customer's. Off, with an honest message, otherwise.
+  const runTriage = triage || (triageAvailable() ? makeIncidentTriage() : null);
+  const triageInFlight = new Set();
+
+  app.get('/api/triage/status', (req, res) => res.json({ available: !!runTriage }));
+  app.post('/api/incidents/:id/triage', async (req, res) => {
+    const inc = store.incidents.get(req.params.id);
+    if (!inc) return res.status(404).json({ error: 'not found' });
+    if (!runTriage) return res.status(503).json({ error: 'analysis unavailable: the collector has no ANTHROPIC_API_KEY' });
+    if (triageInFlight.has(inc.id)) return res.status(409).json({ error: 'analysis already running' });
+    triageInFlight.add(inc.id);
+    try {
+      const draft = await runTriage(store.triageContext(inc));
+      if (!draft) return res.status(502).json({ error: 'the model declined to analyse this incident' });
+      inc.triage = { ...draft, by: (req.body && req.body.by) || 'unknown' };
+      store.act(inc.id, 'triage', { by: inc.triage.by });
+      res.json(inc);
+    } catch (err) {
+      res.status(502).json({ error: `analysis failed: ${err.message}` });
+    } finally {
+      triageInFlight.delete(inc.id);
+    }
+  });
 
   app.post('/ingest', (req, res) => {
     store.ingest(req.body || {});
