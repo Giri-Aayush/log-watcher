@@ -51,8 +51,16 @@ class AlertManager extends EventEmitter {
       if (now - last < this.cfg.transientCooldownS * 1000) return null;
     }
 
+    // A stateful alert is identified by what it is about, not by when this
+    // process noticed it: the same stall re-raised after a sidecar restart
+    // must land on the same incident at the collector. Onset is rounded to
+    // the minute because detectors estimate it (now - "12m 3s").
+    const onset = a.onsetAt || now;
+    const id = a.transient
+      ? `${new Date(now).toISOString().replace(/[:.]/g, '-')}-${a.key}-${++this.seq}`
+      : `${String(this.cfg.label).replace(/[^\w.-]/g, '_')}-${a.key}-${new Date(Math.floor(onset / 60000) * 60000).toISOString().slice(0, 16).replace(':', '-')}`;
     const alert = {
-      id: `${new Date(now).toISOString().replace(/[:.]/g, '-')}-${a.key}-${++this.seq}`,
+      id,
       key: a.key,
       severity: a.severity,
       title: a.title,

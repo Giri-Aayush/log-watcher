@@ -1,4 +1,5 @@
 const os = require('os');
+const fs = require('fs');
 const { EventEmitter } = require('events');
 const { Ring } = require('./ring');
 const { makeSource } = require('./sources');
@@ -246,6 +247,29 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
     }
   }
 
+  // The startup banner ("Diagnostic metadata:" + "version: …" + "Zcash
+  // network: …") is the one authoritative statement of what this node is,
+  // and on a node that has run for a day it is far behind the tail we
+  // backfill. For a log file, read the head once and take it from there.
+  function readBannerFromHead() {
+    if (cfg.source !== 'file' || !cfg.logFile) return;
+    let fd;
+    try {
+      fd = fs.openSync(cfg.logFile, 'r');
+      const buf = Buffer.alloc(256 * 1024);
+      const n = fs.readSync(fd, buf, 0, buf.length, 0);
+      const lines = buf.toString('utf8', 0, n).split('\n');
+      const i = lines.findIndex((l) => l.includes('zebrad::application: Diagnostic metadata'));
+      if (i === -1) return;
+      for (const line of lines.slice(i + 1, i + 20)) {
+        const meta = metaFromContinuation(line);
+        if (meta) detectors.onMeta(meta);
+      }
+    } catch { /* no file yet: the tailer will report it */ } finally {
+      if (fd !== undefined) fs.closeSync(fd);
+    }
+  }
+
   const src = source || makeSource(cfg);
   src.on('line', ingestLine);
   src.on('error', (err) => bus.emit('error', err));
@@ -257,6 +281,7 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
 
   const timers = [];
   function start() {
+    readBannerFromHead();
     if (typeof src.start === 'function') src.start();
     // pollMs = 0 means logs only: no RPC access, tip/sync/errors still come
     // from the log stream and rpc_* detectors stay silent.

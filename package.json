@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/*.test.js",
+    "test": "LW_TRIAGE=off node --test test/*.test.js",
     "test:regtest": "LW_REGTEST=1 node --test test/regtest.test.js",
     "demo": "node scripts/demo.js",
     "simulate": "node scripts/simulate.js"

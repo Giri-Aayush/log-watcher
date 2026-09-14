@@ -80,3 +80,17 @@ test('a failing sink does not break the others', async () => {
   assert.equal(h.sent.length, 1);
   assert.deepEqual(errors, ['sink broken: boom']);
 });
+
+test('a stateful alert keeps its id across processes; transient ones are unique', async () => {
+  const mk = () => harness();
+  const a = mk(), b = mk();
+  const stallAt = { key: 'tip_stalled', severity: 'critical', title: 't', onsetAt: Date.parse('2026-09-14T14:05:20Z') };
+  const x = await a.am.raise(stallAt);
+  const y = await b.am.raise({ ...stallAt, onsetAt: stallAt.onsetAt + 20000 }); // same minute, estimated a bit later
+  assert.equal(x.id, y.id);
+  assert.equal(x.id, 'test-tip_stalled-2026-09-14T14-05');
+  const t1 = await a.am.raise({ key: 'node_restarted', severity: 'info', title: 'r', transient: true });
+  a.advance(61000);
+  const t2 = await a.am.raise({ key: 'node_restarted', severity: 'info', title: 'r', transient: true });
+  assert.notEqual(t1.id, t2.id);
+});

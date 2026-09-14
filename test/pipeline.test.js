@@ -139,3 +139,20 @@ test('heartbeats carry the sidecar\'s dashboard URL and poll interval but not it
   assert.equal(snap.consoleUrl, 'http://collector.test');
   node.server.close();
 });
+
+test('the node\'s network comes from the banner at the head of the log even when the tail has scrolled past it', async () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const node = await fakeNode();
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'lw-head-')), 'zebrad.log');
+  const filler = Array.from({ length: 3000 }, (_, i) => committedAt(1000 + i, Date.now() - 5000)).join('\n');
+  fs.writeFileSync(file, `${lines.banner}\n${lines.bannerVersion}\n${lines.bannerNetwork}\n${filler}\n`);
+  const cfg = structuredClone(defaults);
+  cfg.source = 'file'; cfg.logFile = file; cfg.rpc.url = node.url; cfg.alerts.bundleDir = null; cfg.rpc.pollMs = 0;
+  const p = createPipeline(cfg, { sinks: [] });
+  p.bus.on('error', () => {});
+  p.start();
+  assert.equal(p.detectors.state.node.network, 'Regtest');
+  assert.equal(p.detectors.state.node.version, '6.2.0');
+  p.stop();
+  node.server.close();
+});

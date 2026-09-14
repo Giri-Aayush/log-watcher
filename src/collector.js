@@ -126,6 +126,7 @@ class Store {
   heartbeat(n, msg) {
     n.heartbeat = msg;
     if (msg.node && msg.node.network) n.network = msg.node.network;
+    this.reconcileAfterRestart(n, msg);
     const sample = {
       at: this.now(),
       tip: msg.tip ? msg.tip.height : null,
@@ -160,12 +161,19 @@ class Store {
         resolvedAt: null, resolvedDetail: null, closedBy: null,
         escalations: 0, renotified: 0, notes: [], updates: [],
         bundleFile: null,
+        sidecarStartedAt: (msg.bundle && msg.bundle.sidecar && msg.bundle.sidecar.startedAt) || n.sidecarStartedAt || null,
       };
       // moments (a restart, one big block) are recorded but are not open incidents
       if (inc.transient) inc.resolvedAt = inc.pagedAt;
       this.incidents.set(inc.id, inc);
     }
-    inc.updates.push({ phase: msg.phase, at: now, severity: a.severity, count: a.count });
+    // A NEW for an incident we already have is the same condition re-raised
+    // by a restarted sidecar (ids are stable across restarts); reopen if a
+    // reconcile had closed it meanwhile.
+    const reraised = msg.phase === 'NEW' && inc.updates.length > 0;
+    if (reraised && inc.resolvedAt && !inc.closedBy) { inc.resolvedAt = null; inc.resolvedDetail = null; }
+    inc.updates.push({ phase: reraised ? 'RE-RAISED' : msg.phase, at: now, severity: a.severity, count: a.count });
+    if (reraised) inc.sidecarStartedAt = (msg.bundle && msg.bundle.sidecar && msg.bundle.sidecar.startedAt) || n.sidecarStartedAt || inc.sidecarStartedAt;
     if (msg.phase === 'ESCALATED') inc.escalations++;
     if (msg.phase === 'STILL ACTIVE') inc.renotified++;
     inc.severity = a.severity;
@@ -190,6 +198,34 @@ class Store {
     this.save();
     this.emit('incident', inc);
     return inc;
+  }
+
+  // A sidecar that restarted does not remember the incidents its previous
+  // process raised. Its heartbeat says what is active now; anything this node
+  // has open from before the restart that the new process has not re-raised
+  // is closed as unconfirmed — the condition may well be gone, and if it is
+  // not, the new process will raise it again on the same id.
+  reconcileAfterRestart(n, msg) {
+    const startedAt = msg.sidecar && msg.sidecar.startedAt;
+    if (!startedAt || !Array.isArray(msg.activeAlerts)) return;
+    const activeKeys = new Set(msg.activeAlerts.map((a) => a.key));
+    const mine = [...this.incidents.values()].filter((i) => i.label === n.label && !i.transient && !i.resolvedAt);
+    let changed = false;
+    for (const inc of mine) {
+      const raisedBy = inc.sidecarStartedAt || 0;
+      if (raisedBy >= startedAt) continue; // raised by the current process
+      let why = null;
+      if (!activeKeys.has(inc.key)) why = 'sidecar restarted and did not re-raise this';
+      else if (mine.some((o) => o !== inc && o.key === inc.key && (o.sidecarStartedAt || 0) >= startedAt)) why = 'superseded by the same condition re-raised after a sidecar restart';
+      if (!why) continue;
+      inc.resolvedAt = this.now();
+      inc.resolvedDetail = why;
+      inc.updates.push({ phase: 'RESOLVED', at: this.now(), by: 'reconcile' });
+      this.correlate(inc.key, n.network);
+      changed = true;
+      this.emit('incident', inc);
+    }
+    if (changed) this.save();
   }
 
   // ---- fleet correlation -------------------------------------------------

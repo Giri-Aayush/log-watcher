@@ -304,3 +304,36 @@ test('bundles are served from a relative data dir and never from outside it', as
   assert.equal((await fetch(url('/bundles/..%2F..%2Fincidents.json'))).status, 400);
   c.stop(); srv.close();
 });
+
+test('a sidecar restart neither duplicates a persisting incident nor leaves a vanished one open', () => {
+  const h = harness();
+  const proc1 = { startedAt: T0 - 3600e3 }, proc2 = { startedAt: T0 + 10 * MIN };
+  const beat = (sidecar, active) => h.store.ingest({ phase: 'HEARTBEAT', label: 'pool-1', sentAt: h.now(), sidecar, at: h.now(), node: { network: 'Mainnet' }, tip: { height: 1, at: h.now() }, rpc: { ok: true, ms: 1 }, activeAlerts: active });
+  beat(proc1, []);
+  h.store.ingest({ phase: 'NEW', label: 'pool-1', alert: { ...stall('pool-1-tip_stalled-2026-09-14T11-50'), firstSeen: h.now() }, bundle: { label: 'pool-1', logs: [], sidecar: proc1 } });
+  h.store.ingest({ phase: 'NEW', label: 'pool-1', alert: { ...stall('pool-1-peers_low-2026-09-14T11-55'), key: 'peers_low', severity: 'warning', firstSeen: h.now() }, bundle: { label: 'pool-1', logs: [], sidecar: proc1 } });
+  assert.equal(h.store.openIncidents().length, 2);
+
+  // restart: the tip is still stalled (re-raised on the same id), the peers recovered meanwhile
+  h.advance(10 * MIN);
+  h.store.ingest({ phase: 'NEW', label: 'pool-1', alert: { ...stall('pool-1-tip_stalled-2026-09-14T11-50'), firstSeen: h.now() }, bundle: { label: 'pool-1', logs: [], sidecar: proc2 } });
+  h.advance(6000);
+  beat(proc2, [{ key: 'tip_stalled', severity: 'critical' }]);
+  const open = h.store.openIncidents();
+  assert.equal(open.length, 1, 'one tip_stalled, not two');
+  assert.equal(open[0].updates.map((u) => u.phase).join(','), 'NEW,RE-RAISED');
+  assert.equal(open[0].pagedAt, T0, 'the original page time is kept');
+  const peers = h.store.incidents.get('pool-1-peers_low-2026-09-14T11-55');
+  assert.match(peers.resolvedDetail, /sidecar restarted/);
+
+  // an onset that rounded to a different minute: the new process raises a new id for the same key
+  h.advance(10 * MIN);
+  const proc3 = { startedAt: h.now() };
+  h.store.ingest({ phase: 'NEW', label: 'pool-1', alert: { ...stall('pool-1-tip_stalled-2026-09-14T11-51'), firstSeen: h.now() }, bundle: { label: 'pool-1', logs: [], sidecar: proc3 } });
+  h.advance(6000);
+  beat(proc3, [{ key: 'tip_stalled', severity: 'critical' }]);
+  const now = h.store.openIncidents();
+  assert.equal(now.length, 1, 'the older process\'s incident is superseded, not duplicated');
+  assert.equal(now[0].id, 'pool-1-tip_stalled-2026-09-14T11-51');
+  assert.match(h.store.incidents.get('pool-1-tip_stalled-2026-09-14T11-50').resolvedDetail, /superseded/);
+});
