@@ -1,0 +1,26 @@
+{
+  "label": "foundry-pool-1",
+  "source": "docker",
+  "container": "zebra",
+  "rpc": { "url": "http://127.0.0.1:8232", "cookieFile": "/home/zebra/.cache/zebra/.cookie", "pollMs": 10000 },
+  "metrics": { "url": null, "family": "zebra_consensus_transaction_duration_seconds", "p99WarnS": 2 },
+  "thresholds": {
+    "tipStallMin": 10,
+    "minPeers": 3,
+    "rpcSlowMs": 2000,
+    "rpcFailCount": 3,
+    "errorBurst": 10,
+    "errorWindowS": 60,
+    "mempoolMax": 5000,
+    "bigBlockTxs": 1000,
+    "bigBlockBytes": 1500000,
+    "blockLagS": 90,
+    "eosWarnBlocks": 32256
+  },
+  "alerts": { "cooldownMin": 30, "bundleDir": "bundles", "bundleLogLines": 200, "heartbeat": true },
+  "sinks": {
+    "signalUrl": "http://127.0.0.1:8081/v2/send",
+    "signalNumber": "+15551234567",
+    "webhookUrl": "https://collector.example/ingest"
+  }
+}

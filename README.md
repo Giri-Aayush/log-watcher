@@ -1,77 +1,192 @@
-# Log Watcher (Similar to tail -f)
+# log-watcher
 
-## Overview
+A sidecar for a [Zebra](https://github.com/ZcashFoundation/zebra) node. It tails
+the node's log, polls its RPC, and pages the moment something an operator would
+care about happens — with the evidence attached, so the engineer who picks up the
+page starts reproducing instead of asking for logs.
 
-This Log Watcher project implements a real-time log monitoring solution, similar to the UNIX `tail -f` command. It consists of a server-side program that monitors a log file on a remote machine and a web-based client that displays updates in real-time.
+Built for the way [Zero](https://github.com/ShieldedLabs/zero) supports exchanges,
+mining pools and wallets: the operator runs the sidecar next to `zebrad`, the
+sidecar pages Zero (and the operator) directly, and every page carries a bundle —
+node version, network, tip, peers, RPC latency series, mempool, the last block,
+and the last 200 log lines.
 
-## Features
+This started life in 2023 as a `tail -f` in a browser. After talking to Shielded
+Labs about what Zero actually needs, it became this.
 
-- **Real-time Monitoring:** Server-side program to stream updates from the log file.
-- **Web-based Client:** A client interface that shows live updates without page refresh, displaying the last 10 lines of the log.
-- **Performance Optimized:** Efficient handling of large log files.
-- **Multi-client Support:** The server can handle multiple clients simultaneously.
-- **No Page Reload:** The web page updates in real-time without reloading.
+```
+zebrad ──log (file / docker / journald)──▶ parse ──▶ events ──▶ detectors ──▶ alerts ──▶ Signal / Telegram / Discord / webhook
+   └──── JSON-RPC (cookie auth) ───────▶ poll  ──▶ state  ──┘       │                 └──▶ bundles/<id>.json
+   └──── Prometheus (optional) ────────▶ p99  ──┘                   └──▶ dashboard :3000
+```
 
-## Prerequisites
+## What it pages on
 
-- Node.js environment.
-- `protobuf-compiler` for protobuf support.
+| key | source | fires when | default |
+|---|---|---|---|
+| `tip_stalled` | log + RPC | no new block committed for N minutes | 10 min |
+| `sync_stalled` | log | Zebra's own `chain updates have stalled` / `initial sync is very slow` | — |
+| `rpc_down` | RPC | N consecutive `getblockchaininfo` failures | 3 |
+| `rpc_slow` | RPC | `getblockchaininfo` round-trip above threshold | 2000 ms |
+| `peers_low` | RPC | fewer than N peers on two polls (critical at zero) | 3 |
+| `mempool_high` | RPC | mempool above N transactions | 5000 |
+| `large_block` | RPC | a committed block above N txs or bytes | 1000 / 1.5 MB |
+| `block_lag` | RPC | block committed long after its header timestamp | 90 s |
+| `verify_slow` | metrics | p99 of `zebra_consensus_transaction_duration_seconds` over the last scrape | 2 s |
+| `error_burst` | log | N WARN/ERROR lines inside a sliding window | 10 / 60 s |
+| `log_error` | log | any ERROR line | — |
+| `end_of_support` | log + RPC | this release's halt height is within N blocks of the tip | 32256 (~4 weeks) |
+| `node_restarted` | log | the startup banner appeared | — |
+| `version_changed` | RPC | `getinfo.build` changed | — |
+| `node_reported_error` | RPC | `getinfo.errors` changed (works with no log access at all) | — |
 
-## Installation
+Stateful alerts raise once, re-notify after a cooldown (30 min) or on escalation,
+and send a RESOLVED message when the condition clears. Moments (a restart, one big
+block) are transient and rate-limited per key.
 
-1. **Install protobuf-compiler (Linux):**
-    ```bash
-    sudo apt install protobuf-compiler
-    ```
+Every pattern comes from a running node or from `zebrad`'s source
+(`components/sync/progress.rs`, `end_of_support.rs`); `test/fixtures.js` holds
+the verbatim lines.
 
-2. **Clone the repository:**
-    ```bash
-    git clone https://github.com/Giri-Aayush/log-watcher
-    ```
+## Latency budget
 
-3. **Navigate to the project directory:**
-    ```bash
-    cd log-watcher
-    ```
+Detection happens on the node's box and the page goes straight to the sink — there
+is no pipeline between the two. What bounds each signal:
 
-4. **Install dependencies:**
-    ```bash
-    npm install
-    ```
+| signal | path | time to detect |
+|---|---|---|
+| new block, Zebra stall warning, ERROR line | log push (tail / `docker logs -f`) | < 1 s |
+| RPC down | `rpcFailCount × pollMs` | 45 s default, 10 s with `LW_POLL_MS=5000 LW_RPC_FAIL_COUNT=2` |
+| RPC slow, peers, mempool | poll | ≤ `pollMs` (peers: 2 polls) |
+| tip stalled | timer | `tipStallMin` — a statistical floor: at 75 s spacing, P(no block in 10 min) ≈ e⁻⁸, so it cannot page faster without paging falsely |
+| sidecar or host dead | collector heartbeat gap | `COLLECTOR_QUIET_MS` (60 s) |
 
-## Running the Application
+The page itself is one HTTP POST to a loopback Signal bridge: sub-second.
 
-1. **Start the Server:**
-    ```bash
-    npm run start-server
-    ```
+## Debuggability decisions
 
-2. **Access the Web Client:**
-    Open `http://localhost:3000/log` in your web browser.
+- **The bundle is the unit of debugging.** Every page names a `bundles/<id>.json`
+  with the node's identity, the tip and its age, the RPC latency *series* (last
+  hour, so "RPC got slow at 11:42 right after that 1.9 MB block" is visible), the
+  peer breakdown, the last block's size/tx count/commit lag, and the last 200 log
+  lines. That is the set of things you would otherwise ask the operator for over
+  three Signal messages.
+- **Two clocks on every log line.** The node's timestamp and the sidecar's receive
+  time. A growing gap is the log stream lagging — a symptom in its own right.
+- **Panics are not in the log file.** `zebrad` writes them to stderr. A dead node
+  looks like silence in the log and a refused connection on RPC, so liveness is
+  judged from RPC, never from the log going quiet.
+- **Old lines are history.** On startup (and `docker logs --tail`) the sidecar reads
+  back to build state, but anything older than `replayAgeS` (60 s) cannot page. A
+  restart that happened an hour ago is context, not an incident.
+- **Outbound only.** The sidecar reaches the node over loopback and reaches Zero
+  by POSTing outward. Nothing connects in; no operator has to open a port.
+- **Each alert carries a `next:` line** — the first three things to check, written
+  for the engineer on the rotation, not for the operator.
+- **A human sends every message to an operator.** With `ANTHROPIC_API_KEY` set,
+  each non-info alert gets a first-pass triage draft (probable cause, what to
+  check, a regtest repro sketch, a message to the operator) attached in the
+  dashboard. It is a draft. Nothing is sent from it.
 
-## Docker Deployment
+## Run it
 
-1. **Build the Docker Image:**
-    ```bash
-    docker-compose build logwatcher
-    ```
+### Demo, no node needed
 
-2. **Run the Docker Container:**
-    ```bash
-    docker-compose run --rm logwatcher
-    ```
+```bash
+npm install
+npm run demo          # fake zebrad + sidecar + collector; every scenario fires over ~90 s
+```
 
-## Usage
+Open <http://localhost:3000> (sidecar) and <http://localhost:4000> (collector fleet
+view). Scenarios: `stall peers rpc-slow rpc-down errors restart bigblock mempool zebra-stall`
+(`node scripts/demo.js stall,peers` for a subset).
 
-- The server monitors the log file and updates the web client in real-time.
-- Open multiple tabs to see multi-client support in action.
-- Test by updating the monitored log file.
+### Against a real node
 
-## License
+Zebra in Docker (the Zero `z3-stack` layout — container `zebra`, RPC on 8232):
 
-This project is licensed under [MIT License](LICENSE).
+```bash
+LW_SOURCE=docker LW_CONTAINER=zebra LW_RPC_URL=http://127.0.0.1:8232 npm start
+```
 
-## Contact
+Zebra as a systemd unit with cookie auth (the default since Zebra 2.x):
 
-- [Aayush Giri on LinkedIn](https://www.linkedin.com/in/aayush-giri/)
-- [Project Repository](https://github.com/Giri-Aayush/log-watcher)
+```bash
+LW_SOURCE=journald LW_UNIT=zebrad \
+LW_RPC_URL=http://127.0.0.1:8232 LW_RPC_COOKIE=/home/zebra/.cache/zebra/.cookie npm start
+```
+
+Zebra writing to a file (`[tracing] log_file = "..."` in `zebrad.toml`):
+
+```bash
+LW_SOURCE=file LW_LOG_FILE=/var/log/zebrad.log LW_RPC_URL=http://127.0.0.1:8232 npm start
+```
+
+A node you can only reach over SSH, logs only:
+
+```bash
+LW_SOURCE=command LW_COMMAND="ssh root@node docker logs -f --tail 500 zebra 2>&1" LW_POLL_MS=0 npm start
+```
+
+As a container next to the node: `docker compose up -d log-watcher` (see
+[docker-compose.yml](docker-compose.yml)).
+
+### Paging
+
+| sink | env |
+|---|---|
+| Signal via [signal-cli-rest-api](https://github.com/bbernhard/signal-cli-rest-api) | `LW_SIGNAL_URL=http://127.0.0.1:8081/v2/send LW_SIGNAL_NUMBER=+1555… [LW_SIGNAL_RECIPIENT]` |
+| Telegram | `LW_TELEGRAM_TOKEN LW_TELEGRAM_CHAT` |
+| Discord | `LW_DISCORD_WEBHOOK` |
+| Generic webhook / the collector | `LW_WEBHOOK_URL` — receives alerts with bundles, and a heartbeat every poll |
+
+The console always gets everything.
+
+A page looks like this:
+
+```
+[foundry-pool-1] CRITICAL tip_stalled
+No new block for 12m 30s
+Tip is still 3011882 (last seen via gossip). Target spacing is 75s; 10m without a block means this node stopped receiving them, or the network did.
+zebrad v6.3.0 Mainnet · tip 3011882 · peers 2 · rpc 41ms · mempool 3
+last log: 2026-09-14T11:16:02.733823Z  INFO sync: zebrad::components::sync: waiting to restart sync timeout=67s state_tip=Some(Height(3011882))
+next: Compare height with a public explorer or a second node. If they moved on, this node is partitioned (peers?) or stuck verifying; if not, it is the network.
+bundle: bundles/2026-09-14T11-28-33-120Z-tip_stalled-7.json
+```
+
+### The collector (Zero side)
+
+`scripts/collector.js` is the other end of `LW_WEBHOOK_URL`: it stores every bundle
+under `collected/<label>/`, serves a fleet table at `/`, and logs `QUIET` when a
+sidecar stops sending heartbeats. It is a reference for the shape of the design —
+one process, JSON on disk, no auth — not the production service.
+
+### Configuration
+
+Defaults → `--config file.json` ([config.example.json](config.example.json)) →
+`LW_*` environment. Every threshold in the table above has an env var
+(`LW_TIP_STALL_MIN`, `LW_MIN_PEERS`, `LW_RPC_SLOW_MS`, …); see
+[src/config.js](src/config.js) for the full list. `LW_METRICS_URL` enables the
+Prometheus scrape when `[metrics] endpoint_addr` is set in `zebrad.toml`.
+
+## Tests
+
+```bash
+npm test                # unit + pipeline against a fake RPC server (~0.6 s)
+npm run test:regtest    # real zebrad in regtest: mine 3 blocks, kill it, expect the page (~1.5 s)
+scripts/regtest.sh start && eval "$(scripts/regtest.sh env)" && npm start   # poke at it by hand
+scripts/regtest.sh mine 3
+```
+
+The regtest test needs `zebrad` on `PATH` and is skipped otherwise.
+
+## Not done, on purpose
+
+- Missed-block detection for miners needs the pool's own view (which template it
+  was working on); the sidecar sees `submitblock` results in the log but cannot
+  know a block was *expected*. That wants a small hook on the pool side.
+- `verify_slow` reads Zero's per-check verification histograms; upstream Zebra
+  does not expose them and the endpoint is off by default.
+- The dashboard is a live view, not a history. The collector holds the history.
+- No auth on the dashboard or the collector: bind them to loopback or put them
+  behind whatever you already use.

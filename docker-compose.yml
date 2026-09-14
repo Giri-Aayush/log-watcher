@@ -1,0 +1,29 @@
+# Sidecar next to the Zero z3-stack (deploy/z3-stack/docker-compose.yml in
+# ShieldedLabs/zero): the container there is named `zebra` with RPC on 8232 and
+# cookie auth off. Drop this file beside it, or merge the service in.
+#
+#   docker compose up -d log-watcher
+#   open http://localhost:3000
+services:
+  log-watcher:
+    build: .
+    container_name: log-watcher
+    restart: unless-stopped
+    environment:
+      LW_LABEL: ${LW_LABEL:-zebra-mainnet}
+      LW_SOURCE: docker
+      LW_CONTAINER: ${LW_CONTAINER:-zebra}
+      LW_RPC_URL: ${LW_RPC_URL:-http://zebra:8232}
+      # LW_RPC_COOKIE: /cookie/.cookie     # when rpc.enable_cookie_auth = true; mount the cookie dir read-only
+      # LW_METRICS_URL: http://zebra:9999  # when [metrics] endpoint_addr is set in zebrad.toml
+      # LW_SIGNAL_URL: http://signal-api:8080/v2/send   # bbernhard/signal-cli-rest-api
+      # LW_SIGNAL_NUMBER: "+15551234567"
+      # LW_WEBHOOK_URL: https://collector.example/ingest  # the Zero-side collector (scripts/collector.js)
+      # ANTHROPIC_API_KEY: ...             # optional triage drafts on the dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - bundles:/bundles
+    ports:
+      - "127.0.0.1:3000:3000"
+volumes:
+  bundles:
