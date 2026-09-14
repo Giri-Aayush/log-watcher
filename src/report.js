@@ -60,6 +60,7 @@ function incidentReport(inc, { bundle = null, members = [], now = Date.now() } =
     else if (n.action === 'note') events.push([n.at, `Note by ${n.by}${n.text ? `: "${n.text}"` : ''}`]);
     else if (n.action === 'close') events.push([n.at, `Closed by ${n.by}${n.text ? `: "${n.text}"` : ''}`]);
     else if (n.action === 'report') events.push([n.at, `Report sent by ${n.by}`]);
+    else if (n.action === 'improvement') events.push([n.at, `Improvement recorded by ${n.by}: "${n.text}"`]);
   }
   if (resolved && !inc.closedBy) events.push([resolved, `Cleared${inc.resolvedDetail ? `: ${inc.resolvedDetail}` : ''}`]);
   events.sort((a, b) => a[0] - b[0]);
@@ -114,6 +115,13 @@ function incidentReport(inc, { bundle = null, members = [], now = Date.now() } =
     lines.push('## Analysis');
     lines.push('');
     for (const n of analysis) lines.push(`${n.text}  \n— ${n.by}, ${ts(n.at)}`);
+    lines.push('');
+  }
+
+  if (inc.improvements && inc.improvements.length) {
+    lines.push('## What changed in Zero as a result');
+    lines.push('');
+    for (const im of inc.improvements) lines.push(`- ${im.text}  \n  — ${im.by}, ${ts(im.at)}`);
     lines.push('');
   }
 

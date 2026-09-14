@@ -191,3 +191,61 @@ test('report endpoint data: marking a report sent lands in the record', () => {
   assert.equal(inc.reportSentAt, h.now());
   assert.equal(inc.notes[0].action, 'report');
 });
+
+test('triage context carries the fleet, the history and the last hour, not the whole record', () => {
+  const h = harness();
+  const beat = (label, seq, extra = {}) => h.store.ingest({ phase: 'HEARTBEAT', label, seq, sentAt: h.now(), sidecar: { startedAt: 1 }, at: h.now(), node: { build: 'v6.3.0', network: 'Mainnet' }, tip: { height: 100, at: h.now() - 30000 }, peers: 8, rpc: { ok: true, ms: 12 }, mempool: { size: 3 }, activeAlerts: [], ...extra });
+  beat('pool-1', 1); beat('pool-2', 1, { peers: 9 }); beat('t-1', 1, { node: { network: 'Testnet' } });
+  h.alert('NEW', { ...stall('old-1'), key: 'peers_low', firstSeen: h.now() - 3600e3 * 5 });
+  h.alert('NEW', stall());
+  h.store.act('inc-1', 'note', { by: 'aayush', text: 'checked the explorer, network is fine' });
+  const ctx = h.store.triageContext(h.store.incidents.get('inc-1'));
+  assert.equal(ctx.network, 'Mainnet');
+  assert.deepEqual(ctx.otherNodesOnNetwork.map((n) => n.label), ['pool-2']); // not itself, not the testnet node
+  assert.equal(ctx.recentHistory.length, 1);
+  assert.equal(ctx.recentHistory[0].key, 'peers_low');
+  assert.deepEqual(ctx.incident.engineerNotes, ['note by aayush: checked the explorer, network is fine']);
+  assert.equal(ctx.incident.notes, undefined);
+  assert.equal(ctx.lastHour.samples, 1);
+  assert.equal(ctx.lastHour.rpcP95Ms, 12);
+});
+
+test('triage endpoint: stores the draft and records who asked; 503 without credentials', async () => {
+  const { createCollector } = require('../src/collector');
+  const http = require('http');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lw-triage-'));
+  const seen = [];
+  const withModel = createCollector({ dir, triage: async (ctx) => { seen.push(ctx); return { model: 'stub', at: 1, text: 'Assessment: fine.' }; } });
+  const without = createCollector({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'lw-triage2-')), triage: null });
+  const listen = (app) => new Promise((r) => { const s = http.createServer(app); s.listen(0, '127.0.0.1', () => r(s)); });
+  const a = await listen(withModel.app), b = await listen(without.app);
+  const url = (s, p) => `http://127.0.0.1:${s.address().port}${p}`;
+  const post = (u, body) => fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  await post(url(a, '/ingest'), { phase: 'NEW', label: 'pool-1', alert: stall(), bundle: { label: 'pool-1', logs: ['l1'], node: { network: 'Mainnet' } } });
+  assert.deepEqual(await (await fetch(url(a, '/api/triage/status'))).json(), { available: true });
+  const r = await post(url(a, '/api/incidents/inc-1/triage'), { by: 'aayush' });
+  assert.equal(r.status, 200);
+  const inc = await r.json();
+  assert.equal(inc.triage.text, 'Assessment: fine.');
+  assert.equal(inc.triage.by, 'aayush');
+  assert.equal(inc.notes.at(-1).action, 'triage');
+  assert.equal(seen[0].bundle.logs[0], 'l1');
+  process.env.ANTHROPIC_API_KEY = ''; // make sure the fallback path is the honest 503
+  await post(url(b, '/ingest'), { phase: 'NEW', label: 'pool-1', alert: stall(), bundle: { label: 'pool-1', logs: [] } });
+  const r2 = await post(url(b, '/api/incidents/inc-1/triage'), { by: 'aayush' });
+  assert.equal(r2.status, 503);
+  assert.match((await r2.json()).error, /ANTHROPIC_API_KEY/);
+  withModel.stop(); without.stop(); a.close(); b.close();
+});
+
+test('an improvement is recorded on the incident and counted once it is closed', () => {
+  const h = harness();
+  h.alert('NEW', stall());
+  assert.throws(() => h.store.act('inc-1', 'improvement', { by: 'aayush' }), /needs text/);
+  h.store.act('inc-1', 'improvement', { by: 'aayush', text: 'tip_stalled now checks a second node before paging; upstream zebra#1234' });
+  assert.equal(h.store.analytics().improvements.withImprovement, 0, 'still open: not counted yet');
+  h.store.act('inc-1', 'close', { by: 'aayush', text: 'done' });
+  const a = h.store.analytics();
+  assert.deepEqual(a.improvements, { closed: 1, withImprovement: 1, rate: 1 });
+  assert.equal(h.store.incidents.get('inc-1').improvements[0].by, 'aayush');
+});
