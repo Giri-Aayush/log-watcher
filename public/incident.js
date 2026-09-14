@@ -1,8 +1,8 @@
 // Incident detail page for the collector. Reads /api/incidents/:id (plus the
 // page-time bundle, the node's heartbeat series and the open-incident count)
 // every 3 s, ticks the clock and the open stage's duration once a second, and
-// posts ack / respond / note / close / report / improvement and asks the
-// collector for an analysis. Plain DOM, no framework.
+// posts ack / respond / note / close / report / improvement / promote and asks
+// the collector for an analysis. Plain DOM, no framework.
 // Everything on the page comes from those responses except the engineer's
 // name (localStorage) and the wall clock.
 (() => {
@@ -66,6 +66,8 @@
     triageAvailable: null, // /api/triage/status: can this collector run an analysis?
     triageRunning: false,
     triageError: '', // last inline message from POST /triage (503 / 409 / 502)
+    promoting: false, // POST /promote in flight, or just done
+    promoted: false,
     rendered: {}, // last HTML per region, so an unchanged region is not rebuilt
   };
 
@@ -196,6 +198,7 @@
     renderHead(inc);
     renderLifecycle(inc);
     renderActions(inc);
+    renderKnownIssues(inc);
     renderEvidence(inc);
     renderMembers(inc);
     if (isNetwork(inc)) {
@@ -343,7 +346,7 @@
     set('b-report', !!inc.reportSentAt, inc.reportSentAt ? 'Report sent · ' + (inc.reportSentBy || '?') : 'Report sent');
     $('b-report').title = inc.reportSentAt ? isoTitle(inc.reportSentAt) : 'record that the incident report went to the customer';
     setHref('a-report', '/api/incidents/' + encodeURIComponent(inc.id) + '/report');
-    $('a-raw').hidden = !inc.bundleFile; $('raw-sep').hidden = !inc.bundleFile;
+    $('a-raw').hidden = !inc.bundleFile;
     if (inc.bundleFile) setHref('a-raw', bundleHref(inc.bundleFile));
     renderTriageButton(inc);
     renderNoteBox();
@@ -353,7 +356,6 @@
     const b = $('b-triage');
     const avail = state.triageAvailable;
     b.hidden = avail !== true;
-    $('report-sep').hidden = avail !== true && avail !== false;
     b.disabled = state.triageRunning;
     const label = state.triageRunning ? 'analysing…' : inc.triage ? 'Re-run analysis' : 'Ask Claude for an analysis';
     if (b.textContent !== label) b.textContent = label;
@@ -582,6 +584,7 @@
         case 'report': row.verb = 'sent the incident report'; break;
         case 'triage': row.verb = 'asked Claude for an analysis'; break;
         case 'improvement': row.verb = 'recorded an improvement'; row.text = q(n.text); break;
+        case 'promote': row.verb = 'promoted to known issue'; row.text = n.text ? '<a href="' + esc(kbHref(n.text)) + '" target="_blank" rel="noopener">' + esc(n.text) + '</a>' : ''; break;
         default: row.verb = esc(n.action); row.text = q(n.text);
       }
       rows.push(row);
@@ -610,6 +613,32 @@
     if (typeof v === 'object') { const s = JSON.stringify(v); return '<span class="v obj" title="' + esc(s) + '">' + esc(s) + '</span>'; }
     const s = String(v);
     return '<span class="v' + (cls ? ' ' + cls : '') + '" title="' + esc(s) + '">' + esc(s) + '</span>';
+  }
+
+  const kbHref = (id) => '/api/known-issues/' + encodeURIComponent(id) + '/export';
+
+  // known issues whose signature matched this incident on arrival
+  function renderKnownIssues(inc) {
+    const card = $('kb-card');
+    if (!Array.isArray(inc.knownIssueDetails)) { card.hidden = true; return; } // older collector
+    card.hidden = false;
+    const list = inc.knownIssueDetails;
+    const promotedNote = (inc.notes || []).some((n) => n.action === 'promote');
+    const row = (k, v) => '<span class="k">' + k + '</span>' + (v ? '<span class="v">' + esc(v) + '</span>' : '<span class="v nil">—</span>');
+    const html = list.map((ki) =>
+      '<div class="kb-item">'
+      + '<div class="kb-head"><span class="tag ' + esc(ki.status) + '">' + esc(ki.status) + '</span><span class="title" title="' + esc(ki.title) + '">' + esc(ki.title) + '</span>'
+      + '<span class="seen">seen ' + esc(ki.seen) + (ki.seen === 1 ? ' time' : ' times') + ' on ' + esc(ki.nodes) + (ki.nodes === 1 ? ' node' : ' nodes') + '</span></div>'
+      + '<div class="kb-rows">' + row('cause', ki.cause) + row('fix', ki.fix) + (ki.workaround ? row('workaround', ki.workaround) : '') + (ki.fixedIn ? row('fixed in', ki.fixedIn) : '') + '</div>'
+      + '<a class="more" href="' + esc(kbHref(ki.id)) + '" target="_blank" rel="noopener">knowledge base entry ↗</a>'
+      + '</div>').join('');
+    setHTML('kb', $('kb-list'), html);
+    $('kb-none').hidden = list.length > 0;
+    $('a-promote-new').hidden = list.length === 0;
+    const b = $('b-promote');
+    b.disabled = state.promoting || state.promoted || promotedNote;
+    const label = state.promoting ? 'promoting…' : state.promoted || promotedNote ? 'promoted' : 'Promote to known issue';
+    if (b.textContent !== label) b.textContent = label;
   }
 
   function renderEvidence(inc) {
@@ -762,6 +791,27 @@
     }
   });
   $('b-discard').addEventListener('click', () => { state.triageHidden = true; $('triage').hidden = true; });
+  async function promote() {
+    const by = state.by || askName('');
+    if (!by || state.promoting) return;
+    state.promoting = true;
+    if (state.inc) renderKnownIssues(state.inc);
+    try {
+      const r = await fetch('/api/incidents/' + encodeURIComponent(state.id) + '/promote', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ by }),
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      state.promoted = true;
+    } catch (err) {
+      console.error('promote failed', err);
+      alert('Could not promote ' + state.id + ': ' + err.message);
+    } finally {
+      state.promoting = false;
+      await refresh();
+    }
+  }
+  $('b-promote').addEventListener('click', promote);
+  $('a-promote-new').addEventListener('click', (e) => { e.preventDefault(); promote(); });
   $('log-foot').addEventListener('click', (e) => {
     const a = e.target.closest('#log-toggle');
     if (!a) return;

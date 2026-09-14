@@ -208,8 +208,20 @@ test('GET /api/incidents/:id carries the collector clock and the latest bundle; 
     assert.equal(body.at, T0 + 5 * MIN, 'at is the collector clock at response time');
     assert.equal(body.receivedAt, T0);
     assert.deepEqual(body.bundle.logs, ['l1']);
+    assert.deepEqual(body.knownIssueDetails, []);
     const missing = await fetch(`${base}/api/incidents/nope`);
     assert.equal(missing.status, 404);
+
+    // POST /promote must reach its own handler, not the generic :action route
+    const promoted = await fetch(`${base}/api/incidents/inc-1/promote`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ by: 'aayush' }) });
+    assert.equal(promoted.status, 200);
+    const issue = await promoted.json();
+    assert.equal(issue.status, 'draft');
+    const after = await (await fetch(`${base}/api/incidents/inc-1`)).json();
+    assert.equal(after.knownIssueDetails.length, 1);
+    assert.equal(after.knownIssueDetails[0].id, issue.id);
+    assert.equal(after.notes.at(-1).action, 'promote');
+    assert.equal(after.notes.at(-1).text, issue.id);
   } finally {
     c.stop();
     await new Promise((resolve) => server.close(resolve));

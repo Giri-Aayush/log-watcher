@@ -566,6 +566,18 @@ function createCollector({ dir, quietMs = 60000, now = Date.now, publicDir = pat
     const members = (inc.members || []).map((id) => store.incidents.get(id)).filter(Boolean);
     res.type('text/markdown').send(incidentReport(inc, { bundle, members, now: store.now() }));
   });
+  // promote and match must be registered before the generic :action route,
+  // or Express hands them to act(), which does not know them
+  app.post('/api/incidents/:id/promote', (req, res) => {
+    const inc = store.incidents.get(req.params.id);
+    if (!inc) return res.status(404).json({ error: 'not found' });
+    res.json(store.promoteToKnownIssue(inc, { by: (req.body && req.body.by) || 'unknown' }));
+  });
+  app.post('/api/incidents/:id/match', (req, res) => {
+    const inc = store.incidents.get(req.params.id);
+    if (!inc) return res.status(404).json({ error: 'not found' });
+    res.json(store.matchKnownIssues(inc));
+  });
   app.post('/api/incidents/:id/:action', (req, res) => {
     try {
       const inc = store.act(req.params.id, req.params.action, req.body || {});
@@ -592,16 +604,6 @@ function createCollector({ dir, quietMs = 60000, now = Date.now, publicDir = pat
     const ki = store.updateKnownIssue(req.params.id, req.body || {}, { by: (req.body && req.body.by) || 'unknown' });
     if (!ki) return res.status(404).json({ error: 'not found' });
     res.json(ki);
-  });
-  app.post('/api/incidents/:id/promote', (req, res) => {
-    const inc = store.incidents.get(req.params.id);
-    if (!inc) return res.status(404).json({ error: 'not found' });
-    res.json(store.promoteToKnownIssue(inc, { by: (req.body && req.body.by) || 'unknown' }));
-  });
-  app.post('/api/incidents/:id/match', (req, res) => {
-    const inc = store.incidents.get(req.params.id);
-    if (!inc) return res.status(404).json({ error: 'not found' });
-    res.json(store.matchKnownIssues(inc));
   });
   app.get('/api/versions', (req, res) => res.json(store.versions()));
   app.get('/bundles/*', (req, res) => res.sendFile(path.join(store.dir, 'bundles', req.params[0])));

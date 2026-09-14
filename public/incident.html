@@ -103,9 +103,9 @@ input { font: inherit; }
 .btn.small { padding: 3px 10px; font-size: var(--fs-label); }
 .acts-row .close { margin-left: auto; }
 .acts-row a { font-size: var(--fs-label); padding: 4px 6px; }
-.acts-row.report { font-size: var(--fs-label); gap: var(--sp-2); }
+.acts-row.report { font-size: var(--fs-label); gap: var(--sp-3); }
 .acts-row.report a { padding: 0; }
-.acts-row.report .sep { color: var(--fg-3); }
+.acts-row.report .muted:empty { display: none; }
 .acts-row.report .muted.err { color: var(--crit); }
 .note-row { display: flex; gap: var(--sp-2); }
 .note-row input { flex: 1; background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: var(--r-control); color: var(--fg); padding: 5px 10px; }
@@ -159,7 +159,24 @@ input { font: inherit; }
 .trail-row .verb { color: var(--fg-2); }
 .trail-row .what { overflow-wrap: anywhere; }
 
-/* right column: evidence, snapshot, members */
+/* right column: seen before, evidence, snapshot, members */
+.tag.draft { background: var(--info-soft); color: var(--info); }
+.tag.confirmed { background: var(--ok-soft); color: var(--ok); }
+.tag.retired { background: var(--neutral-soft); color: var(--fg-2); }
+.card-head a.small { font-size: var(--fs-micro); white-space: nowrap; }
+.kb-item { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.kb-item:last-child { border-bottom: 0; }
+.kb-head { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.kb-head .title { font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.kb-head .seen { font-family: var(--font-mono); font-size: var(--fs-micro); color: var(--fg-3); white-space: nowrap; }
+.kb-rows { display: grid; grid-template-columns: 76px minmax(0, 1fr); column-gap: 12px; row-gap: 4px; font-size: 12.5px; }
+.kb-rows .k { color: var(--fg-2); }
+.kb-rows .v { overflow-wrap: anywhere; }
+.kb-rows .v.nil { color: var(--fg-3); }
+.kb-item .more { font-size: var(--fs-label); }
+.kb-none { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: 10px 16px; font-size: var(--fs-label); color: var(--fg-3); }
+.kb-none .btn { flex: none; white-space: nowrap; }
+
 .kv { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 16px; row-gap: 5px; padding: 10px 16px; font-family: var(--font-mono); font-size: var(--fs-label); }
 .kv .k { color: var(--fg-2); }
 .kv .v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -236,10 +253,8 @@ input { font: inherit; }
           <div class="acts-row report">
             <button type="button" class="btn small" id="b-triage" hidden>Ask Claude for an analysis</button>
             <span class="muted" id="triage-status"></span>
-            <span class="sep" id="report-sep" hidden>·</span>
             <a id="a-report" target="_blank" rel="noopener">Incident report ↗</a>
             <button type="button" class="btn small" id="b-report">Report sent</button>
-            <span class="sep" id="raw-sep">·</span>
             <a id="a-raw" target="_blank" rel="noopener">raw JSON bundle ↗</a>
           </div>
           <form class="note-row" id="note-row" hidden>
@@ -291,6 +306,12 @@ input { font: inherit; }
       </div>
 
       <div class="col">
+        <div class="card" id="kb-card" hidden>
+          <div class="card-head"><span>seen before</span><a class="small" id="a-promote-new" href="#promote" hidden>Promote as new</a></div>
+          <div id="kb-list"></div>
+          <div class="kb-none" id="kb-none" hidden><span>no known issue matches this signature</span><button type="button" class="btn small" id="b-promote">Promote to known issue</button></div>
+        </div>
+
         <div class="card">
           <div class="card-head"><span>evidence · from detector</span></div>
           <div class="kv" id="evidence"></div>
