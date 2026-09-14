@@ -171,3 +171,21 @@ test('tip_stalled is re-checked over RPC at page time and not sent when the tip 
   p.stop();
   node.server.close();
 });
+
+test('a stall that was paged gets its RESOLVED when the confirmation re-check sees the tip move', async () => {
+  const node = await fakeNode();
+  const { p, sent, source } = build(node.url, { tipStallMin: 1 });
+  node.state.blocks = 4345594;
+  source.emit('line', committedAt(4345594, Date.now()));
+  p.detectors.now = () => Date.now() + 2 * 60000;
+  p.detectors.tick(); // tip still 4345594 over RPC: confirmed, paged
+  for (let i = 0; i < 20 && !sent.length; i++) await new Promise((r) => setTimeout(r, 25));
+  assert.deepEqual(sent, ['NEW tip_stalled']);
+  node.state.blocks = 4345595; // the chain moves, RPC sees it first
+  p.detectors.tick(); // re-raise (deduped) -> confirmation sees the tip moved -> resolve
+  for (let i = 0; i < 20 && sent.length < 2; i++) await new Promise((r) => setTimeout(r, 25));
+  assert.deepEqual(sent, ['NEW tip_stalled', 'RESOLVED tip_stalled']);
+  assert.equal(p.alerts.list().active.length, 0);
+  p.stop();
+  node.server.close();
+});

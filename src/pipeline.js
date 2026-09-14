@@ -88,9 +88,12 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
       try {
         const { result } = await rpc.getBlockchainInfo();
         if (result.blocks > (a.evidence.height ?? -1)) {
-          detectors.activeKeys.delete(a.key); // never paged, so nothing to resolve later
+          // The tip update resolves the stall through the normal path: a
+          // stall that was paged earlier gets its RESOLVED, one that never
+          // was is simply forgotten (resolve() emits nothing for it).
+          const wasPaged = alerts.active.has(a.key);
           detectors.onPoll({ ok: true, ms: 0, blockchain: result });
-          bus.emit('notice', `${a.key} not paged: tip moved to ${result.blocks} on confirmation`);
+          bus.emit('notice', `${a.key}: tip moved to ${result.blocks} on confirmation${wasPaged ? '; resolved' : '; not paged'}`);
           return;
         }
         a.evidence.confirmedOverRpc = true;
