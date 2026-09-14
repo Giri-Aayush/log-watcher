@@ -1,237 +1,95 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>log-watcher</title>
-  <link rel="stylesheet" href="styles.css">
-  <script src="/socket.io/socket.io.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>zero-sidecar</title>
+<link rel="stylesheet" href="zero-tokens.css">
+<link rel="stylesheet" href="sidecar.css">
+<script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-  <header>
-    <div>
-      <h1>log-watcher <span id="label"></span></h1>
-      <div class="sub"><span id="source"></span> · rpc <span id="rpc-url"></span></div>
+<div class="page">
+  <header class="topbar">
+    <div class="brand"><span class="name">zero-sidecar</span><span class="meta" id="brand-meta"></span></div>
+    <span class="link" id="link"><span class="dot"></span><span id="link-text">connecting</span></span>
+    <div class="topbar-right">
+      <a class="console" id="console-link" href="#" hidden>← console</a>
+      <span class="clock" id="clock">--:--:-- UTC</span>
     </div>
-    <div class="flow" id="flow">
-      <span title="log lines read">lines <b id="c-lines">0</b></span>
-      <span title="semantic events parsed from those lines">events <b id="c-events">0</b></span>
-      <span title="RPC polls">polls <b id="c-polls">0</b></span>
-      <span title="pages sent (alerts + resolves)">pages <b id="c-pages">0</b></span>
-      <span title="messages delivered to the collector (queued, waiting for it)" id="c-delivery-wrap" hidden>delivered <b id="c-delivery">0</b></span>
-    </div>
-    <div id="status" class="pill">connecting</div>
   </header>
 
-  <section class="cards">
-    <div class="card"><div class="k">node</div><div class="v" id="node">–</div><div class="s" id="node-sub"></div></div>
-    <div class="card"><div class="k">tip</div><div class="v" id="tip">–</div><div class="s" id="tip-sub"></div></div>
-    <div class="card"><div class="k">peers</div><div class="v" id="peers">–</div><div class="s" id="peers-sub"></div></div>
-    <div class="card"><div class="k">rpc</div><div class="v" id="rpc">–</div><div class="s" id="rpc-sub"></div></div>
-    <div class="card"><div class="k">mempool</div><div class="v" id="mempool">–</div><div class="s" id="mempool-sub"></div></div>
-    <div class="card"><div class="k">last block</div><div class="v" id="block">–</div><div class="s" id="block-sub"></div></div>
-    <div class="card"><div class="k">sync</div><div class="v" id="sync">–</div><div class="s" id="sync-sub"></div></div>
-    <div class="card"><div class="k">warn / error</div><div class="v" id="warns">–</div><div class="s" id="warns-sub"></div></div>
-    <div class="card" id="gbt-card" hidden><div class="k">getblocktemplate</div><div class="v" id="gbt">–</div><div class="s" id="gbt-sub"></div></div>
-  </section>
-
-  <section class="panel">
-    <div class="panel-head"><h2>Active alerts</h2><span class="muted" id="active-count"></span></div>
-    <div id="alerts" class="alerts"><div class="empty">nothing active</div></div>
-  </section>
-
-  <section class="panel">
-    <div class="panel-head"><h2>Recent</h2></div>
-    <div id="history" class="history"></div>
-  </section>
-
-  <section class="panel">
-    <div class="panel-head"><h2>Events</h2><span class="muted">what the parser made of the log, newest first</span></div>
-    <div id="events" class="events"></div>
-  </section>
-
-  <section class="panel">
-    <div class="panel-head">
-      <h2>Log</h2>
-      <div class="controls">
-        <input type="search" id="search" placeholder="filter (target, message, fields)">
-        <label><input type="checkbox" class="lvl" value="ERROR" checked> error</label>
-        <label><input type="checkbox" class="lvl" value="WARN" checked> warn</label>
-        <label><input type="checkbox" class="lvl" value="INFO" checked> info</label>
-        <label><input type="checkbox" id="follow" checked> follow</label>
+  <main class="main">
+    <div class="head">
+      <span class="label" id="label"></span>
+      <span class="state quiet" id="state"><span class="dot"></span><span id="state-text">connecting</span></span>
+      <span class="facts" id="facts"></span>
+      <div class="pipe-wrap">
+        <span class="pipe-lbl">pipeline</span>
+        <div class="pipe">
+          <span><b id="c-lines">—</b> <span class="u">log lines</span></span><span class="arrow">→</span>
+          <span><b id="c-events">—</b> <span class="u">events</span></span><span class="arrow">→</span>
+          <span><b id="c-polls">—</b> <span class="u">RPC polls</span></span><span class="arrow">→</span>
+          <span><b id="c-pages">—</b> <span class="u">pages</span></span>
+          <span class="delivery" id="pipe-delivery" hidden><span class="arrow">→</span><span><b id="c-delivered">—</b> <span class="u">delivered</span></span><span class="q" id="c-queued" hidden></span></span>
+        </div>
       </div>
     </div>
-    <div id="log" class="log"></div>
-  </section>
 
-<script>
-const $ = (id) => document.getElementById(id);
-const socket = io();
-let state = null;
-let logs = [];
-let active = [];
-let history = [];
-let thresholds = {};
-let events = [];
-let counters = {};
-
-function age(ms) {
-  if (ms == null) return '';
-  const s = Math.max(0, Math.round(ms / 1000));
-  if (s < 90) return s + 's';
-  const m = Math.floor(s / 60);
-  return m < 90 ? m + 'm ' + (s % 60) + 's' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
-}
-const fmtTs = (t) => new Date(t).toISOString().slice(11, 19) + 'Z';
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-
-function renderState() {
-  if (!state) return;
-  const now = Date.now();
-  const n = state.node || {};
-  $('node').textContent = n.build || n.version || '?';
-  $('node-sub').textContent = [n.network, n.subversion].filter(Boolean).join(' · ');
-  const tip = state.tip || {};
-  $('tip').textContent = tip.height ?? '–';
-  const tipAge = tip.at ? now - tip.at : null;
-  $('tip-sub').textContent = tip.at ? age(tipAge) + ' ago via ' + tip.source : 'no block seen yet';
-  $('tip').className = 'v' + (tipAge != null && thresholds.tipStallMin > 0 && tipAge > thresholds.tipStallMin * 60000 ? ' bad' : '');
-  $('peers').textContent = state.peers ?? '–';
-  $('peers').className = 'v' + (state.peers != null && state.peers < thresholds.minPeers ? ' bad' : '');
-  $('peers-sub').textContent = 'minimum ' + thresholds.minPeers;
-  const r = state.rpc || {};
-  $('rpc').textContent = r.ok === false ? 'DOWN' : r.ms != null ? r.ms + ' ms' : '–';
-  $('rpc').className = 'v' + (r.ok === false ? ' bad' : r.ms > thresholds.rpcSlowMs ? ' warn' : '');
-  $('rpc-sub').textContent = r.ok === false ? (r.lastError && r.lastError.message) || '' : r.at ? 'polled ' + age(now - r.at) + ' ago' : '';
-  const m = state.mempool || {};
-  $('mempool').textContent = m.size ?? '–';
-  $('mempool-sub').textContent = m.bytes != null ? (m.bytes / 1024).toFixed(0) + ' KiB' : '';
-  const b = state.lastBlock;
-  $('block').textContent = b ? b.height : '–';
-  $('block-sub').textContent = b ? `${b.txs} txs · ${(b.size / 1024).toFixed(1)} KiB · lag ${b.lagS}s` : '';
-  const s = state.sync || {};
-  $('sync').textContent = s.state ? s.state.replace('_', ' ') : '–';
-  $('sync-sub').textContent = s.percent != null ? s.percent + '%' + (s.remaining ? ` · ${s.remaining} left` : '') : '';
-  $('sync').className = 'v' + (s.state === 'stalled' ? ' bad' : '');
-  const l = state.log || {};
-  $('warns').textContent = (l.warnCount || 0) + ' / ' + (l.errorCount || 0);
-  $('warns-sub').textContent = l.lastWarnError ? l.lastWarnError.message.slice(0, 60) : 'since start';
-  if (state.haltHeight) $('node-sub').textContent += ` · halts at ${state.haltHeight}`;
-  const g = state.gbt;
-  $('gbt-card').hidden = !(g && g.at);
-  if (g && g.at) {
-    $('gbt').textContent = g.ok === false ? 'FAILING' : g.ms + ' ms';
-    $('gbt').className = 'v' + (g.ok === false ? ' bad' : g.ms > thresholds.gbtSlowMs ? ' warn' : '');
-    $('gbt-sub').textContent = g.ok === false ? (g.error || '').slice(0, 60) : `template h${g.height} · ${g.txs} txs · the call a pool makes`;
-  }
-
-  const crit = active.some((a) => a.severity === 'critical');
-  $('status').textContent = crit ? 'critical' : active.length ? 'degraded' : r.ok === false ? 'rpc down' : 'ok';
-  $('status').className = 'pill ' + (crit || r.ok === false ? 'bad' : active.length ? 'warn' : 'ok');
-}
-
-function alertHtml(a, resolved) {
-  const since = age(Date.now() - a.firstSeen);
-  const ev = Object.entries(a.evidence || {}).filter(([, v]) => v != null && typeof v !== 'object').map(([k, v]) => `${k}=${esc(v)}`).join(' ');
-  return `<div class="alert ${a.severity}${resolved ? ' resolved' : ''}">
-    <div class="alert-head">
-      <span class="sev">${resolved ? 'resolved' : a.severity}</span>
-      <span class="key">${esc(a.key)}</span>
-      <span class="title">${esc(a.title)}</span>
-      <span class="meta">${a.count > 1 ? 'x' + a.count + ' · ' : ''}${resolved ? age(Date.now() - a.resolved.at) + ' ago' : since}</span>
+    <div class="tiles">
+      <div class="tile"><span class="k">tip</span><span class="big" id="tip-v">—</span><span class="s" id="tip-s"></span></div>
+      <div class="tile"><span class="k">tip age</span><span class="big" id="age-v">—</span><span class="s" id="age-s"></span></div>
+      <div class="tile"><span class="k">peers</span><span class="big" id="peers-v">—</span><span class="s" id="peers-s"></span></div>
+      <div class="tile">
+        <div class="khead"><span class="k">RPC latency</span><span class="kv" id="rpc-v">—</span></div>
+        <svg class="spark" id="rpc-spark" viewBox="0 0 200 30" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <span class="s" id="rpc-s"></span>
+      </div>
+      <div class="tile"><span class="k">mempool</span><span class="big" id="mem-v">—</span><span class="s" id="mem-s"></span></div>
+      <div class="tile"><span class="k">sync</span><span class="big" id="sync-v">—</span><span class="s" id="sync-s"></span></div>
+      <div class="tile" id="gbt-tile" hidden><span class="k">getblocktemplate</span><span class="big" id="gbt-v">—</span><span class="s" id="gbt-s"></span></div>
     </div>
-    ${a.detail ? `<div class="detail">${esc(a.detail)}</div>` : ''}
-    ${resolved && a.resolved.detail ? `<div class="detail muted">${esc(a.resolved.detail)}</div>` : ''}
-    ${ev ? `<div class="evidence">${ev}</div>` : ''}
-    ${a.suggest && !resolved ? `<div class="suggest">next: ${esc(a.suggest)}</div>` : ''}
-    ${a.triage ? `<details class="triage"><summary>triage draft (${esc(a.triage.model)}) — for a human to approve</summary><pre>${esc(a.triage.text)}</pre></details>` : ''}
-    <div class="links"><a href="/api/alerts/${encodeURIComponent(a.id)}" target="_blank">bundle</a></div>
-  </div>`;
-}
 
-function renderCounters() {
-  for (const k of ['lines', 'events', 'polls', 'pages']) $('c-' + k).textContent = (counters[k] || 0).toLocaleString();
-  const d = counters.delivery;
-  $('c-delivery-wrap').hidden = !d;
-  if (d) {
-    $('c-delivery').textContent = d.delivered.toLocaleString() + (d.queued ? ` (+${d.queued} queued)` : '');
-    $('c-delivery').style.color = d.consecutiveFailures ? 'var(--bad)' : '';
-    $('c-delivery-wrap').title = d.consecutiveFailures ? `collector unreachable: ${d.lastError}; ${d.queued} queued, retrying` : 'messages delivered to the collector';
-  }
-}
+    <div class="cols">
+      <div class="col">
+        <div class="card">
+          <div class="card-head"><span>active alerts</span><span class="n" id="alerts-n"></span></div>
+          <div id="alerts"><div class="empty">nothing active</div></div>
+        </div>
 
-function eventHtml(e) {
-  return `<div class="ev ${e.type}${e.replay ? ' replay' : ''}"><span class="ts">${fmtTs(e.at)}</span><span class="type">${esc(e.type)}</span><span class="txt">${esc(e.text)}</span>${e.replay ? '<span class="tag">history</span>' : ''}</div>`;
-}
+        <div class="card" id="block-card" hidden>
+          <div class="card-head"><span>last block</span><span class="n" id="block-when"></span></div>
+          <div class="lb">
+            <div><span class="k">height</span><span id="block-height">—</span></div>
+            <div><span class="k">size</span><span id="block-size">—</span></div>
+            <div><span class="k">txs</span><span id="block-txs">—</span></div>
+            <div><span class="k">log lag</span><span id="block-lag">—</span></div>
+          </div>
+        </div>
 
-function renderEvents() {
-  $('events').innerHTML = events.length ? events.slice(-40).reverse().map(eventHtml).join('') : '<div class="empty">waiting for the first log line</div>';
-}
+        <div class="card">
+          <div class="card-head"><span>events · parsed from log</span><span class="live" id="live"><span class="dot"></span><span id="live-text">quiet</span></span></div>
+          <div class="feed" id="feed"><div class="empty">waiting for the first log line</div></div>
+        </div>
+      </div>
 
-function flash(id) {
-  const el = $(id);
-  el.classList.remove('flash');
-  void el.offsetWidth; // restart the animation
-  el.classList.add('flash');
-}
-
-function renderAlerts() {
-  $('active-count').textContent = active.length ? active.length + ' active' : '';
-  $('alerts').innerHTML = active.length ? active.map((a) => alertHtml(a, false)).join('') : '<div class="empty">nothing active</div>';
-  const recent = history.filter((h) => h.transient || h.resolved).slice(0, 12);
-  $('history').innerHTML = recent.length ? recent.map((a) => alertHtml(a, !!a.resolved)).join('') : '<div class="empty">no history yet</div>';
-}
-
-function logLineHtml(e) {
-  const fields = Object.entries(e.fields || {}).map(([k, v]) => `<span class="f">${esc(k)}=<b>${esc(v)}</b></span>`).join(' ');
-  return `<div class="line ${e.level}"><span class="ts">${esc(e.ts.slice(11, 23))}</span><span class="lvl">${e.level}</span><span class="tgt">${esc((e.target || '').replace(/^zebrad?::|^zebra_/, ''))}</span><span class="msg">${esc(e.message)}</span> ${fields}</div>`;
-}
-
-function passes(e) {
-  const q = $('search').value.trim().toLowerCase();
-  const lv = [...document.querySelectorAll('.lvl:checked')].map((c) => c.value);
-  if (!lv.includes(e.level) && !(e.level === 'DEBUG' || e.level === 'TRACE')) return false;
-  if (!q) return true;
-  return e.raw.toLowerCase().includes(q);
-}
-
-function renderLog() {
-  const el = $('log');
-  el.innerHTML = logs.filter(passes).slice(-400).map(logLineHtml).join('');
-  if ($('follow').checked) el.scrollTop = el.scrollHeight;
-}
-
-socket.on('init', (snap) => {
-  state = snap.state; logs = snap.logs; active = snap.alerts.active; history = snap.alerts.history; thresholds = snap.thresholds;
-  events = snap.events || []; counters = snap.counters || {};
-  $('label').textContent = snap.label; $('source').textContent = snap.source; $('rpc-url').textContent = snap.rpcUrl;
-  renderState(); renderAlerts(); renderLog(); renderEvents(); renderCounters();
-});
-socket.on('state', (m) => { state = m.state || m; if (m.counters) counters = m.counters; renderState(); renderCounters(); });
-socket.on('event', (e) => {
-  events.push(e); if (events.length > 200) events.shift();
-  $('events').insertAdjacentHTML('afterbegin', eventHtml(e));
-  while ($('events').children.length > 40) $('events').lastChild.remove();
-  if (!e.replay) flash('c-events');
-  if (e.type === 'block_committed' && !e.replay) flash('tip');
-});
-socket.on('log', (e) => {
-  logs.push(e); if (logs.length > 2000) logs.shift();
-  flash('c-lines');
-  if (passes(e)) { const el = $('log'); el.insertAdjacentHTML('beforeend', logLineHtml(e)); while (el.children.length > 400) el.firstChild.remove(); if ($('follow').checked) el.scrollTop = el.scrollHeight; }
-});
-socket.on('alert', (a) => {
-  const upsert = (arr) => { const i = arr.findIndex((x) => x.id === a.id); if (i === -1) arr.unshift(a); else arr[i] = a; };
-  if (!a.transient && !a.resolved) upsert(active);
-  upsert(history);
-  renderAlerts(); renderState(); flash('c-pages');
-});
-socket.on('resolve', (a) => { active = active.filter((x) => x.key !== a.key); const i = history.findIndex((x) => x.id === a.id); if (i !== -1) history[i] = a; else history.unshift(a); renderAlerts(); renderState(); });
-socket.on('disconnect', () => { $('status').textContent = 'disconnected'; $('status').className = 'pill bad'; });
-
-$('search').addEventListener('input', renderLog);
-for (const c of document.querySelectorAll('.lvl')) c.addEventListener('change', renderLog);
-setInterval(() => { renderState(); if (active.length) renderAlerts(); }, 5000);
-</script>
+      <div class="card log-card">
+        <div class="log-head">
+          <span>live log</span>
+          <div class="seg" id="levels" role="group" aria-label="minimum level">
+            <button type="button" data-level="all">all</button>
+            <button type="button" data-level="info">info+</button>
+            <button type="button" data-level="warn">warn+</button>
+            <button type="button" data-level="error">error</button>
+          </div>
+          <span class="n" id="log-n"></span>
+        </div>
+        <div class="log" id="log"><div class="empty">no lines yet</div></div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="sidecar.js"></script>
 </body>
 </html>
