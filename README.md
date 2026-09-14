@@ -206,7 +206,11 @@ serves the Overview at `/` (built from the mock in [design/](design/)): p50/p95
 of each gap over a window, oldest unacknowledged, availability, incidents per
 hour, the fleet table, and the open incidents with Ack / Responded / Close.
 Every value on it comes from `/api/analytics`, `/api/fleet` and
-`/api/incidents`. `GET /api/incidents/<id>/report` renders the customer-facing
+`/api/incidents`. Each incident can record what changed in Zero because of it (`POST
+…/improvement`: a detector, a threshold, a runbook line, an upstream PR); the
+analytics report how many closed incidents left one behind, which is the JD's
+"each engagement ends as a permanent improvement" as a number.
+`GET /api/incidents/<id>/report` renders the customer-facing
 incident report (Markdown: summary, timeline, response times, evidence, node at
 page time, the engineer's notes as analysis, recommendations) from the same
 record; `POST …/report` marks it sent. Every
