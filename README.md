@@ -129,8 +129,12 @@ The page itself is one HTTP POST to a loopback Signal bridge: sub-second.
   page-time bundle, the other nodes on the same network, this node's history
   and the last hour of heartbeats, and attaches a draft: assessment (node-local,
   network-wide, or expected on this network), probable cause, what to check, a
-  regtest repro, a message to the operator, confidence. Credentials are Zero's
-  (`ANTHROPIC_API_KEY` in the collector's environment), never the customer's.
+  regtest repro, a message to the operator, confidence — under 160 words, in
+  the voice of a senior SRE handing off. Credentials are Zero's, never the
+  customer's: `ANTHROPIC_API_KEY` in the collector's environment uses the API;
+  without one, a logged-in `claude` CLI on the collector's PATH is used as a
+  subprocess (`LW_TRIAGE=api|cli|off`, `LW_TRIAGE_MODEL`). About 30 s per
+  analysis through the CLI.
   The sidecar can do a bundle-only version on the box if it is given a key. In
   both cases it is a draft. Nothing is sent from it.
 

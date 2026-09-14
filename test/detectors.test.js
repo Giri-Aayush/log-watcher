@@ -113,6 +113,12 @@ test('node restart, version change and getinfo.errors are transient notification
   h.ok({ info: { build: 'v6.2.0', testnet: true } });
   h.ok({ info: { build: 'v6.3.0', testnet: true, errors: 'peer set: no peers', errorstimestamp: 1 } });
   assert.deepEqual(h.keys().slice(1), ['version_changed', 'node_reported_error']);
+  // "last error" flips between two recurring messages: neither is news the second time
+  h.ok({ info: { build: 'v6.3.0', testnet: true, errors: 'chain tip metrics channel closed', errorstimestamp: 2 } });
+  h.ok({ info: { build: 'v6.3.0', testnet: true, errors: 'peer set: no peers', errorstimestamp: 3 } });
+  h.ok({ info: { build: 'v6.3.0', testnet: true, errors: 'disk full', errorstimestamp: 4 } });
+  assert.deepEqual(h.keys().slice(1), ['version_changed', 'node_reported_error', 'node_reported_error']);
+  assert.equal(h.raised.at(-1).detail, 'disk full');
 });
 
 test('error burst over a sliding window', () => {

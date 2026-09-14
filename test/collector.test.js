@@ -253,13 +253,14 @@ test('triage endpoint: stores the draft and records who asked; 503 without crede
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lw-triage-'));
   const seen = [];
   const withModel = createCollector({ dir, triage: async (ctx) => { seen.push(ctx); return { model: 'stub', at: 1, text: 'Assessment: fine.' }; } });
+  process.env.LW_TRIAGE = 'off'; // a real `claude` on PATH would otherwise be picked up here
   const without = createCollector({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'lw-triage2-')), triage: null });
   const listen = (app) => new Promise((r) => { const s = http.createServer(app); s.listen(0, '127.0.0.1', () => r(s)); });
   const a = await listen(withModel.app), b = await listen(without.app);
   const url = (s, p) => `http://127.0.0.1:${s.address().port}${p}`;
   const post = (u, body) => fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   await post(url(a, '/ingest'), { phase: 'NEW', label: 'pool-1', alert: stall(), bundle: { label: 'pool-1', logs: ['l1'], node: { network: 'Mainnet' } } });
-  assert.deepEqual(await (await fetch(url(a, '/api/triage/status'))).json(), { available: true });
+  assert.equal((await (await fetch(url(a, '/api/triage/status'))).json()).available, true);
   const r = await post(url(a, '/api/incidents/inc-1/triage'), { by: 'aayush' });
   assert.equal(r.status, 200);
   const inc = await r.json();
@@ -267,11 +268,11 @@ test('triage endpoint: stores the draft and records who asked; 503 without crede
   assert.equal(inc.triage.by, 'aayush');
   assert.equal(inc.notes.at(-1).action, 'triage');
   assert.equal(seen[0].bundle.logs[0], 'l1');
-  process.env.ANTHROPIC_API_KEY = ''; // make sure the fallback path is the honest 503
   await post(url(b, '/ingest'), { phase: 'NEW', label: 'pool-1', alert: stall(), bundle: { label: 'pool-1', logs: [] } });
   const r2 = await post(url(b, '/api/incidents/inc-1/triage'), { by: 'aayush' });
   assert.equal(r2.status, 503);
   assert.match((await r2.json()).error, /ANTHROPIC_API_KEY/);
+  delete process.env.LW_TRIAGE;
   withModel.stop(); without.stop(); a.close(); b.close();
 });
 

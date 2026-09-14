@@ -240,10 +240,15 @@ class Detectors extends EventEmitter {
           { from: prevBuild, to: sample.info.build }, { transient: true });
       }
       // getinfo.errors carries the last WARN/ERROR the node logged — a way to
-      // see problems even when we have no log access at all.
+      // see problems even when we have no log access at all. It is "last", so
+      // it flips between recurring messages; only a message never seen from
+      // this process is news.
       if (sample.info.errors && sample.info.errors !== n.errors) {
         n.errors = sample.info.errors;
-        if (!/chain tip metrics channel closed/.test(sample.info.errors)) { // benign startup noise
+        this.seenNodeErrors = this.seenNodeErrors || new Set();
+        const benign = /chain tip metrics channel closed/.test(sample.info.errors); // startup noise
+        if (!benign && !this.seenNodeErrors.has(sample.info.errors)) {
+          this.seenNodeErrors.add(sample.info.errors);
           this.raise('node_reported_error', 'info', 'Node reports a new last error', sample.info.errors,
             { errors: sample.info.errors, at: sample.info.errorstimestamp }, { transient: true });
         }

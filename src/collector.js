@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const { incidentReport } = require('./report');
-const { makeIncidentTriage, triageAvailable } = require('./triage');
+const { makeIncidentTriage, makeCliTriage, triageBackend } = require('./triage');
 const kb = require('./knowledge');
 
 // The Zero-side end of the sidecar's webhook, and the incident record.
@@ -283,7 +283,7 @@ class Store {
         node: bundle.node, tip: bundle.tip, sync: bundle.sync, peers: bundle.peers, peerSummary: bundle.peerSummary, mempool: bundle.mempool,
         rpc: bundle.rpc && { ok: bundle.rpc.ok, ms: bundle.rpc.ms, failures: bundle.rpc.failures, lastError: bundle.rpc.lastError },
         gbt: bundle.gbt, lastBlock: bundle.lastBlock, logDelayMs: bundle.logDelayMs, sidecar: bundle.sidecar && { version: bundle.sidecar.version, source: bundle.sidecar.source, thresholds: bundle.sidecar.thresholds },
-        share: bundle.share, logs: (bundle.logs || []).slice(-40),
+        share: bundle.share, logs: (bundle.logs || []).slice(-25),
       },
       network, otherNodesOnNetwork: fleet, recentHistory: history, lastHour: series,
       knownIssues: (inc.knownIssues || []).map((id) => this.knownIssues.get(id)).filter(Boolean).map((ki) => ({ title: ki.title, cause: ki.cause, fix: ki.fix, workaround: ki.workaround, status: ki.status, seen: ki.occurrences.length })),
@@ -517,14 +517,16 @@ function createCollector({ dir, quietMs = 60000, now = Date.now, publicDir = pat
   app.use(express.json({ limit: '10mb' }));
   // Analysis on Zero's side: needs Zero's Anthropic credentials in this
   // process, never the customer's. Off, with an honest message, otherwise.
-  const runTriage = triage || (triageAvailable() ? makeIncidentTriage() : null);
+  const backend = triage ? 'custom' : triageBackend();
+  const model = process.env.LW_TRIAGE_MODEL || (backend === 'cli' ? 'opus' : 'claude-opus-5');
+  const runTriage = triage || (backend === 'api' ? makeIncidentTriage({ model }) : backend === 'cli' ? makeCliTriage({ model }) : null);
   const triageInFlight = new Set();
 
-  app.get('/api/triage/status', (req, res) => res.json({ available: !!runTriage }));
+  app.get('/api/triage/status', (req, res) => res.json({ available: !!runTriage, backend: runTriage ? backend : null, model: runTriage ? model : null }));
   app.post('/api/incidents/:id/triage', async (req, res) => {
     const inc = store.incidents.get(req.params.id);
     if (!inc) return res.status(404).json({ error: 'not found' });
-    if (!runTriage) return res.status(503).json({ error: 'analysis unavailable: the collector has no ANTHROPIC_API_KEY' });
+    if (!runTriage) return res.status(503).json({ error: 'analysis unavailable: the collector has no ANTHROPIC_API_KEY and no `claude` CLI on its PATH' });
     if (triageInFlight.has(inc.id)) return res.status(409).json({ error: 'analysis already running' });
     triageInFlight.add(inc.id);
     try {
