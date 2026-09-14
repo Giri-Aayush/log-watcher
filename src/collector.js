@@ -358,6 +358,8 @@ class Store {
       bySeverity: count(incidents, 'severity'), byKey: count(incidents, 'key'), byNode: count(incidents, 'label'),
       latency: { detect, ack, respond, resolve, duration },
       oldestUnackedS: unacked.length ? Math.round((now - unacked[0].receivedAt) / 1000) : null,
+      // when the record last went clean; not window-scoped, so the Overview can say "last cleared" for any window
+      lastResolvedAt: [...this.incidents.values()].reduce((m, i) => (!i.transient && i.resolvedAt && i.resolvedAt > m ? i.resolvedAt : m), 0) || null,
       timeline: { bucketMs, buckets },
       perNode,
       noisiest: Object.entries(count(incidents, 'key')).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([key, n]) => ({ key, count: n })),

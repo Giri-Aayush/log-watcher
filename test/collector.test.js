@@ -46,6 +46,7 @@ test('an alert becomes an incident with the response timestamps filled in as thi
   assert.equal(a.latency.respond.p50, 7 * MIN);
   assert.equal(a.latency.resolve.p50, 22 * MIN);
   assert.equal(a.latency.duration.p50, 12 * MIN);
+  assert.equal(a.lastResolvedAt, done.resolvedAt);
 });
 
 test('escalations and re-notifications update one incident; transient alerts are events, not incidents', () => {
@@ -65,6 +66,7 @@ test('escalations and re-notifications update one incident; transient alerts are
   assert.equal(a.totals.events, 1);
   assert.equal(a.totals.open, 1);
   assert.equal(a.totals.unacked, 1);
+  assert.equal(a.lastResolvedAt, null, 'an event is not a cleared incident');
 });
 
 test('heartbeats build a per-node series, a fleet row, and availability; silence flips the node to quiet', () => {

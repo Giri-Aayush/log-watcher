@@ -1,137 +1,272 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Zero · fleet</title>
-  <link rel="stylesheet" href="styles.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Zero · Overview</title>
+<link rel="stylesheet" href="zero-tokens.css">
+<style>
+/* Overview screen. Layout and sizes follow design/Zero Overview.dc.html;
+   every color is a token from zero-tokens.css except --quiet-fg, the lighter
+   quiet text the mock uses because --quiet is too dark on --quiet-soft. */
+:root { --quiet-fg: #C4797D; }
+
+[hidden] { display: none !important; }
+button { font: inherit; cursor: pointer; }
+button:disabled { cursor: default; }
+
+.page { min-width: var(--page-min); max-width: var(--page-max); margin: 0 auto; min-height: 100vh; background: var(--bg); color: var(--fg); }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* top bar */
+.topbar { height: var(--bar-h); display: flex; align-items: center; gap: var(--sp-4); padding: 0 var(--gutter); border-bottom: 1px solid var(--border); background: var(--bg-elevated); white-space: nowrap; overflow: hidden; }
+.brand { display: flex; align-items: baseline; gap: var(--sp-2); }
+.brand .name { font-weight: var(--fw-medium); font-size: 14px; }
+.brand .org { font-size: var(--fs-micro); color: var(--fg-3); }
+.nav { display: flex; gap: var(--sp-1); }
+.nav > * { padding: 4px 10px; border-radius: var(--r-control); color: var(--fg-2); text-decoration: none; }
+.nav > a:hover { text-decoration: none; }
+.nav > .active { color: var(--fg); background: var(--surface-hover); }
+.nav > .soon { color: var(--fg-3); cursor: default; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: var(--sp-3); }
+.kbd { display: inline-flex; align-items: center; padding: 2px 7px; border: 1px solid var(--border); border-radius: var(--r-control); background: var(--bg); color: var(--fg-3); font-size: var(--fs-micro); }
+.oncall { font-size: var(--fs-label); color: var(--fg-2); }
+.oncall b { font-weight: var(--fw-regular); color: var(--fg); cursor: pointer; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: var(--r-control); font-size: var(--fs-label); }
+.pill.crit { background: var(--crit-soft); color: var(--crit); }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.clock { font-family: var(--font-mono); font-size: var(--fs-label); color: var(--fg-2); }
+
+/* page body */
+.main { padding: var(--sp-4) var(--gutter) var(--sp-8); display: flex; flex-direction: column; gap: var(--sp-4); }
+.h-title { font-size: var(--fs-title); font-weight: var(--fw-medium); }
+.fleet-head { display: flex; align-items: center; gap: var(--sp-5); }
+.seg { display: flex; border: 1px solid var(--border); border-radius: var(--r-control); overflow: hidden; background: var(--bg-elevated); }
+.seg button { border: 0; padding: 3px 10px; font-size: var(--fs-label); font-family: var(--font-mono); background: transparent; color: var(--fg-2); transition: background var(--dur-micro) var(--ease), color var(--dur-micro) var(--ease); }
+.seg button:hover { color: var(--fg); }
+.seg button.active { background: var(--surface-hover); color: var(--fg); }
+.totals { display: flex; gap: var(--sp-5); font-size: var(--fs-label); color: var(--fg-2); font-family: var(--font-mono); white-space: nowrap; }
+.totals b { font-weight: var(--fw-regular); color: var(--fg); }
+.totals b.crit { color: var(--crit); }
+.live { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-micro); color: var(--fg-3); }
+.live .dot { color: var(--ok); }
+.live.down .dot { color: var(--crit); }
+
+/* KPI tiles */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--r-card); overflow: hidden; }
+.kpi { background: var(--surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.kpi .k { font-size: var(--fs-micro); color: var(--fg-2); letter-spacing: var(--tracking-label); white-space: nowrap; }
+.kpi .v { display: flex; align-items: baseline; gap: 6px; font-family: var(--font-mono); white-space: nowrap; min-width: 0; }
+.kpi .big { font-size: var(--fs-number); font-weight: var(--fw-medium); line-height: var(--lh-number); overflow: hidden; text-overflow: ellipsis; }
+.kpi .p95 { font-size: var(--fs-label); color: var(--fg-2); }
+.kpi .s { font-size: var(--fs-micro); color: var(--fg-3); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi.ring-ok { box-shadow: inset 0 0 0 1px var(--ok); }     .kpi.ring-ok .big { color: var(--ok); }
+.kpi.ring-warn { box-shadow: inset 0 0 0 1px var(--warn); } .kpi.ring-warn .big { color: var(--warn); }
+.kpi.ring-crit { box-shadow: inset 0 0 0 1px var(--crit); } .kpi.ring-crit .big { color: var(--crit); }
+
+/* cards */
+.card { border: 1px solid var(--border); border-radius: var(--r-card); background: var(--surface); }
+
+/* chart */
+.chart { padding: 12px 14px; display: flex; flex-direction: column; gap: var(--sp-2); }
+.chart-head { display: flex; align-items: center; gap: var(--sp-4); }
+.chart-title { font-size: var(--fs-label); color: var(--fg-2); }
+.legend { display: flex; gap: var(--sp-3); font-size: var(--fs-micro); color: var(--fg-2); margin-left: auto; white-space: nowrap; }
+.legend > span { display: inline-flex; align-items: center; gap: 5px; }
+.legend .sw { width: 8px; height: 8px; display: inline-block; }
+.legend .sw.crit { background: var(--crit); }
+.legend .sw.warn { background: var(--warn); }
+.legend .sw.info { background: var(--info); }
+.chart svg { width: 100%; height: 90px; display: block; }
+.chart .axis { stroke: var(--border-strong); }
+.chart .grid { stroke: var(--border); opacity: .75; }
+.chart .bars.info { fill: var(--info); }
+.chart .bars.warn { fill: var(--warn); }
+.chart .bars.crit { fill: var(--crit); }
+.axis-labels { display: flex; justify-content: space-between; font-size: var(--fs-micro); color: var(--fg-3); font-family: var(--font-mono); }
+
+/* nodes */
+.nodes { overflow: hidden; }
+.filters { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: var(--fs-label); }
+.filters .lbl { color: var(--fg-2); margin-right: 6px; }
+.chips { display: flex; align-items: center; gap: 6px; }
+.chip-f { border: 0; background: transparent; padding: 1px 8px; border-radius: var(--r-control); color: var(--fg-2); font-size: var(--fs-micro); line-height: var(--lh-body); transition: background var(--dur-micro) var(--ease), color var(--dur-micro) var(--ease); }
+.chip-f:hover { color: var(--fg); }
+.chip-f.active { background: var(--surface-hover); color: var(--fg); }
+.filters .note { margin-left: auto; font-size: var(--fs-micro); color: var(--fg-3); }
+
+table.fleet { width: 100%; border-collapse: collapse; font-size: var(--fs-label); }
+.fleet thead tr { background: var(--bg-elevated); color: var(--fg-2); font-size: var(--fs-micro); text-align: left; }
+.fleet th { padding: 6px 12px; font-weight: var(--fw-regular); border-bottom: 1px solid var(--border); white-space: nowrap; }
+.fleet th .arrow { color: var(--fg-3); }
+.fleet tbody { font-family: var(--font-mono); }
+.fleet tbody tr { cursor: pointer; height: var(--row-h); transition: background var(--dur-hover) var(--ease); }
+.fleet tbody tr:hover { background: var(--surface-hover); }
+.fleet td { padding: 0 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.fleet tbody tr:last-child td { border-bottom: 0; }
+.fleet .r { text-align: right; }
+.fleet td.node { font-family: var(--font-sans); font-weight: var(--fw-medium); }
+.fleet td.net { color: var(--fg-2); }
+.fleet td.crit { color: var(--crit); }
+.fleet td.warn { color: var(--warn); }
+.fleet td.none { color: var(--fg-3); }
+.fleet tr.quiet { color: var(--fg-3); }
+.fleet tr.quiet td.node { color: var(--fg-2); }
+.fleet tr.quiet td.net { color: inherit; }
+.fleet tr.quiet td.seen { color: var(--quiet-fg); }
+.fleet tbody tr.empty-row { cursor: default; height: auto; }
+.fleet tbody tr.empty-row:hover { background: transparent; }
+.fleet td.empty { padding: var(--sp-6); text-align: center; color: var(--fg-3); font-family: var(--font-sans); }
+
+.state { display: inline-flex; align-items: center; gap: 6px; padding: 1px 7px; border-radius: var(--r-control); font-family: var(--font-sans); }
+.state.ok { background: var(--ok-soft); color: var(--ok); }
+.state.degraded { background: var(--warn-soft); color: var(--warn); }
+.state.critical { background: var(--crit-soft); color: var(--crit); }
+.state.quiet { background: var(--quiet-soft); color: var(--quiet-fg); }
+.state.quiet .dot { background: transparent; border: 1px solid currentColor; box-sizing: border-box; }
+
+.tags { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.tag { display: inline-flex; align-items: center; gap: 5px; padding: 1px 6px; border-radius: var(--r-chip); font-size: var(--fs-micro); }
+.tag.critical { background: var(--crit-soft); color: var(--crit); }
+.tag.warning { background: var(--warn-soft); color: var(--warn); }
+.tag.info { background: var(--info-soft); color: var(--info); }
+.tag.suppressed { opacity: .45; }
+.tag .ack { font-size: 10px; }
+
+/* open incidents */
+.section { display: flex; flex-direction: column; gap: var(--sp-2); }
+.section-head { display: flex; align-items: baseline; gap: var(--sp-3); }
+.section-head .sub { font-size: var(--fs-label); color: var(--fg-3); }
+.inc { overflow: hidden; display: grid; grid-template-columns: 72px 140px 130px minmax(0, 1fr) 150px 110px auto; /* detector is 140 not the mock's 100: network_tip_stalled needs it */ column-gap: var(--sp-3); }
+.inc-rows { display: contents; }
+.inc-head, .inc-row { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; padding: 0 12px; border-bottom: 1px solid var(--border); border-left: 2px solid transparent; }
+.inc-head { padding: 6px 12px; background: var(--bg-elevated); color: var(--fg-2); font-size: var(--fs-micro); }
+.inc-head .end { justify-self: end; }
+.inc-row { align-items: center; height: 36px; }
+.inc-row.unacked { background: color-mix(in srgb, var(--crit) 6%, transparent); border-left-color: var(--crit); }
+.inc-rows > .inc-row:last-child { border-bottom: 0; }
+.inc-row .tag { justify-self: start; }
+.inc-row .det { font-family: var(--font-mono); font-size: var(--fs-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inc-row .node { font-weight: var(--fw-medium); color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inc-row .node.network { font-family: var(--font-mono); font-weight: var(--fw-regular); font-size: var(--fs-label); }
+.inc-row .title { color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inc-row .age { font-family: var(--font-mono); font-size: var(--fs-label); }
+.inc-row .age.acked { color: var(--fg-2); }
+.inc-row .age.late { color: var(--crit); }
+.inc-row .status { font-size: var(--fs-micro); color: var(--crit); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inc-row .status.acked { color: var(--fg-2); }
+.actions { display: flex; gap: var(--sp-1); align-items: center; justify-self: end; }
+.btn { border: 1px solid var(--border-strong); background: var(--bg-elevated); color: var(--fg); border-radius: var(--r-control); padding: 2px 8px; font-size: var(--fs-label); transition: background var(--dur-micro) var(--ease); }
+.btn:hover:not(:disabled) { background: var(--surface-hover); }
+.btn:disabled { color: var(--fg-3); }
+.btn.close { color: var(--fg-2); }
+.actions a { padding: 2px 8px; font-size: var(--fs-label); }
+.inc-empty { grid-column: 1 / -1; padding: var(--sp-6); text-align: center; color: var(--fg-3); font-size: var(--fs-label); }
+</style>
 </head>
 <body>
-  <header>
-    <div class="id">
-      <h1>Zero collector <span class="name">fleet</span></h1>
-      <div class="sub"><span id="stamp">–</span><span class="sep">·</span>window <select id="window" class="mono"><option value="1h">1h</option><option value="6h">6h</option><option value="24h" selected>24h</option><option value="7d">7d</option><option value="30d">30d</option></select></div>
+<div class="page">
+  <header class="topbar">
+    <div class="brand"><span class="name">Zero</span><span class="org">Shielded Labs</span></div>
+    <nav class="nav" aria-label="sections">
+      <a class="active" href="/" aria-current="page">Overview</a>
+      <span class="soon" title="coming">Incident</span>
+      <span class="soon" title="coming">Node</span>
+      <span class="soon" title="coming">Sidecar</span>
+      <span class="soon" title="coming">Components</span>
+    </nav>
+    <div class="topbar-right">
+      <span class="kbd">⌘K</span>
+      <span class="oncall">on call <b id="oncall" title="click to set your name">—</b></span>
+      <span class="pill crit" id="crit-pill" hidden><span class="dot"></span><span><span class="num" id="crit-n">0</span> critical open</span></span>
+      <span class="clock" id="clock">--:--:-- UTC</span>
     </div>
-    <div class="flow">
-      <span>nodes <b id="t-nodes">–</b></span>
-      <span>incidents <b id="t-incidents">–</b></span>
-      <span>open <b id="t-open">–</b></span>
-      <span>unacked <b id="t-unacked">–</b></span>
-    </div>
-    <div id="status" class="pill">loading</div>
   </header>
 
-  <section class="cards">
-    <div class="card"><div class="k">time to detect · p50 / p95</div><div class="v" id="m-detect">–</div><div class="s">page − onset</div></div>
-    <div class="card"><div class="k">time to acknowledge</div><div class="v" id="m-ack">–</div><div class="s">ack − page</div></div>
-    <div class="card"><div class="k">time to respond</div><div class="v" id="m-respond">–</div><div class="s">told the operator − page</div></div>
-    <div class="card"><div class="k">time to resolve</div><div class="v" id="m-resolve">–</div><div class="s">cleared − onset</div></div>
-    <div class="card"><div class="k">oldest unacked</div><div class="v" id="m-oldest">–</div><div class="s">the number that should be zero</div></div>
-    <div class="card"><div class="k">noisiest detector</div><div class="v" id="m-noisy">–</div><div class="s" id="m-noisy-s"></div></div>
-  </section>
+  <main class="main">
+    <div class="fleet-head">
+      <span class="h-title">Fleet</span>
+      <div class="seg" id="windows" role="group" aria-label="window">
+        <button type="button" data-win="1h">1h</button>
+        <button type="button" data-win="6h">6h</button>
+        <button type="button" data-win="24h" class="active">24h</button>
+        <button type="button" data-win="7d">7d</button>
+        <button type="button" data-win="30d">30d</button>
+      </div>
+      <div class="totals">
+        <span><b id="t-nodes">—</b> nodes</span>
+        <span><b id="t-incidents">—</b> incidents</span>
+        <span><b id="t-open">—</b> open</span>
+        <span><b id="t-unacked">—</b> unacknowledged</span>
+      </div>
+      <span class="live" id="live"><span class="dot"></span><span id="live-text">connecting</span></span>
+    </div>
 
-  <section class="panel">
-    <div class="panel-head"><h2>Fleet</h2><span class="muted" id="fleet-sub"></span></div>
-    <div class="scroll"><table class="grid" id="fleet"><thead><tr>
-      <th>node</th><th>state</th><th class="num">seen</th><th>zebrad</th><th>network</th><th class="num">tip</th><th class="num">tip age</th><th class="num">peers</th><th class="num">rpc</th><th class="num">mempool</th><th class="num">log lag</th><th>open</th>
-    </tr></thead><tbody></tbody></table></div>
-  </section>
+    <div class="kpis">
+      <div class="kpi"><span class="k">time to detect</span><div class="v"><span class="big" id="k-detect">—</span><span class="p95" id="k-detect-95"></span></div><span class="s" id="k-detect-n"></span></div>
+      <div class="kpi"><span class="k">time to acknowledge</span><div class="v"><span class="big" id="k-ack">—</span><span class="p95" id="k-ack-95"></span></div><span class="s" id="k-ack-n"></span></div>
+      <div class="kpi"><span class="k">time to respond</span><div class="v"><span class="big" id="k-respond">—</span><span class="p95" id="k-respond-95"></span></div><span class="s" id="k-respond-n"></span></div>
+      <div class="kpi"><span class="k">time to resolve</span><div class="v"><span class="big" id="k-resolve">—</span><span class="p95" id="k-resolve-95"></span></div><span class="s" id="k-resolve-n"></span></div>
+      <div class="kpi ring-ok" id="k-oldest-tile"><span class="k">oldest unacknowledged</span><div class="v"><span class="big" id="k-oldest">—</span></div><span class="s" id="k-oldest-note"></span></div>
+      <div class="kpi"><span class="k">availability</span><div class="v"><span class="big" id="k-avail">—</span></div><span class="s" id="k-avail-note"></span></div>
+      <div class="kpi"><span class="k">noisiest detector</span><div class="v"><span class="big" id="k-noisy">—</span></div><span class="s" id="k-noisy-note"></span></div>
+    </div>
 
-  <section class="panel">
-    <div class="panel-head"><h2>Incidents</h2><span class="muted" id="inc-sub"></span></div>
-    <div class="scroll"><table class="grid" id="incidents"><thead><tr>
-      <th>paged</th><th>node</th><th>sev</th><th>key</th><th>title</th><th class="num">detect</th><th class="num">ack</th><th class="num">respond</th><th class="num">resolve</th><th>state</th><th>actions</th>
-    </tr></thead><tbody></tbody></table></div>
-  </section>
+    <div class="card chart">
+      <div class="chart-head">
+        <span class="chart-title" id="chart-title">incidents per hour</span>
+        <div class="legend">
+          <span><i class="sw crit"></i>critical <span class="num" id="lg-crit">—</span></span>
+          <span><i class="sw warn"></i>warning <span class="num" id="lg-warn">—</span></span>
+          <span><i class="sw info"></i>info <span class="num" id="lg-info">—</span></span>
+        </div>
+      </div>
+      <svg viewBox="0 0 960 90" preserveAspectRatio="none" aria-hidden="true">
+        <line class="axis" x1="0" y1="89.5" x2="960" y2="89.5"></line>
+        <line class="grid" x1="0" y1="30" x2="960" y2="30"></line>
+        <line class="grid" x1="0" y1="60" x2="960" y2="60"></line>
+        <path class="bars info" id="bars-info" d=""></path>
+        <path class="bars warn" id="bars-warn" d=""></path>
+        <path class="bars crit" id="bars-crit" d=""></path>
+      </svg>
+      <div class="axis-labels" id="axis-labels"></div>
+    </div>
 
-<script>
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const BY = (localStorage.getItem('lw-by') || '').trim();
-function dur(ms) {
-  if (ms == null) return '–';
-  const s = Math.round(ms / 1000);
-  if (s < 60) return s + 's';
-  const m = Math.floor(s / 60);
-  if (m < 60) return m + 'm' + (s % 60 ? ' ' + (s % 60) + 's' : '');
-  const h = Math.floor(m / 60);
-  return h + 'h ' + (m % 60) + 'm';
-}
-const ts = (t) => t ? new Date(t).toISOString().slice(5, 19).replace('T', ' ') + 'Z' : '–';
-const pair = (st) => st && st.count ? `${dur(st.p50)} / ${dur(st.p95)}` : '–';
+    <div class="card nodes">
+      <div class="filters">
+        <span class="lbl">nodes</span>
+        <div class="chips" id="node-filters"></div>
+        <span class="note">sorted by state, then tip age</span>
+      </div>
+      <table class="fleet" id="fleet">
+        <thead><tr>
+          <th>node</th>
+          <th>state <span class="arrow">↓</span></th>
+          <th class="r">seen</th>
+          <th>zebrad</th>
+          <th>network</th>
+          <th class="r">tip</th>
+          <th class="r">tip age</th>
+          <th class="r">peers</th>
+          <th class="r">rpc</th>
+          <th class="r">mempool</th>
+          <th class="r">log lag</th>
+          <th>open</th>
+        </tr></thead>
+        <tbody id="fleet-body"></tbody>
+      </table>
+    </div>
 
-async function load() {
-  const w = $('window').value;
-  const [fleet, analytics, incidents] = await Promise.all([
-    fetch('/api/fleet').then((r) => r.json()),
-    fetch('/api/analytics?window=' + w).then((r) => r.json()),
-    fetch('/api/incidents?window=' + w).then((r) => r.json()),
-  ]);
-  $('stamp').textContent = new Date(analytics.at).toISOString().slice(0, 19) + 'Z';
-  const t = analytics.totals;
-  $('t-nodes').textContent = t.nodes; $('t-incidents').textContent = t.incidents; $('t-open').textContent = t.open; $('t-unacked').textContent = t.unacked;
-  const crit = fleet.some((n) => n.state === 'critical' || n.state === 'quiet');
-  $('status').textContent = crit ? 'critical' : fleet.some((n) => n.state === 'degraded') ? 'degraded' : fleet.length ? 'ok' : 'no nodes';
-  $('status').className = 'pill ' + (crit ? 'bad' : fleet.some((n) => n.state === 'degraded') ? 'warn' : 'ok');
-  const L = analytics.latency;
-  $('m-detect').textContent = pair(L.detect); $('m-ack').textContent = pair(L.ack); $('m-respond').textContent = pair(L.respond); $('m-resolve').textContent = pair(L.resolve);
-  $('m-oldest').textContent = analytics.oldestUnackedS != null ? dur(analytics.oldestUnackedS * 1000) : '0';
-  $('m-oldest').className = 'v' + (analytics.oldestUnackedS > 600 ? ' bad' : analytics.oldestUnackedS > 0 ? ' warn' : ' ok');
-  const noisy = analytics.noisiest[0];
-  $('m-noisy').textContent = noisy ? noisy.key : '–'; $('m-noisy-s').textContent = noisy ? noisy.count + ' in window' : '';
-
-  $('fleet-sub').textContent = `${fleet.length} node${fleet.length === 1 ? '' : 's'} · ${t.quietNodes} quiet`;
-  $('fleet').tBodies[0].innerHTML = fleet.map((n) => `<tr>
-    <td class="mono"><b>${esc(n.label)}</b></td>
-    <td><span class="pill ${n.state}">${n.state}</span></td>
-    <td class="num">${n.silentS != null ? n.silentS + 's' : '–'}</td>
-    <td class="mono">${esc(n.node ? n.node.build || n.node.version || '?' : '?')}</td>
-    <td>${esc(n.node ? n.node.network || '' : '')}</td>
-    <td class="num">${n.tip ? n.tip.height : '–'}</td>
-    <td class="num">${n.tipAgeS != null ? dur(n.tipAgeS * 1000) : '–'}</td>
-    <td class="num">${n.peers ?? '–'}</td>
-    <td class="num">${n.rpc ? (n.rpc.ok === false ? '<span class="pill bad">down</span>' : n.rpc.ms + ' ms') : '–'}</td>
-    <td class="num">${n.mempool ? n.mempool.size : '–'}</td>
-    <td class="num">${n.logDelayMs != null ? n.logDelayMs + ' ms' : '–'}</td>
-    <td>${n.open.map((o) => `<span class="chip ${o.severity}">${esc(o.key)}${o.acked ? ' ✓' : ''}</span>`).join('') || '<span class="muted">–</span>'}</td>
-  </tr>`).join('') || '<tr><td colspan="12" class="empty">no heartbeats yet</td></tr>';
-
-  const rows = incidents.filter((i) => !i.transient);
-  $('inc-sub').textContent = `${rows.length} incidents · ${incidents.length - rows.length} events`;
-  $('incidents').tBodies[0].innerHTML = rows.map((i) => {
-    const state = i.resolvedAt ? (i.closedBy ? 'closed' : 'resolved') : i.respondedAt ? 'responded' : i.ackedAt ? 'acked' : 'open';
-    const act = (a, label) => `<a href="#" data-id="${esc(i.id)}" data-act="${a}">${label}</a>`;
-    const actions = i.resolvedAt ? '' : [!i.ackedAt && act('ack', 'ack'), !i.respondedAt && act('respond', 'responded'), act('close', 'close')].filter(Boolean).join(' · ');
-    return `<tr class="${i.severity}">
-      <td class="mono">${ts(i.pagedAt)}</td>
-      <td class="mono">${esc(i.label)}</td>
-      <td><span class="sev">${i.severity}</span></td>
-      <td class="mono">${esc(i.key)}</td>
-      <td>${esc(i.title)}${i.escalations ? ` <span class="chip warning">esc ×${i.escalations}</span>` : ''}</td>
-      <td class="num">${dur(i.pagedAt - i.onsetAt)}</td>
-      <td class="num">${i.ackedAt ? dur(i.ackedAt - i.pagedAt) : (i.resolvedAt ? '–' : '<span class="pill bad">' + dur(Date.now() - i.pagedAt) + '</span>')}</td>
-      <td class="num">${i.respondedAt ? dur(i.respondedAt - i.pagedAt) : '–'}</td>
-      <td class="num">${i.resolvedAt ? dur(i.resolvedAt - i.onsetAt) : '<span class="muted">open ' + dur(Date.now() - i.pagedAt) + '</span>'}</td>
-      <td><span class="pill ${state === 'open' ? 'bad' : state === 'resolved' || state === 'closed' ? 'ok' : 'info'}">${state}</span></td>
-      <td>${actions}${i.bundleFile ? (actions ? ' · ' : '') + `<a href="/bundles/${esc(i.bundleFile.replace(/^bundles\//, ''))}" target="_blank">bundle</a>` : ''}</td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="11" class="empty">no incidents in this window</td></tr>';
-}
-
-document.addEventListener('click', async (e) => {
-  const a = e.target.closest('a[data-act]');
-  if (!a) return;
-  e.preventDefault();
-  let by = BY || prompt('your name (remembered):', '');
-  if (by == null) return;
-  localStorage.setItem('lw-by', by);
-  const text = a.dataset.act === 'ack' ? null : prompt(a.dataset.act === 'respond' ? 'what did you tell the operator?' : 'why close it?', '');
-  await fetch(`/api/incidents/${encodeURIComponent(a.dataset.id)}/${a.dataset.act}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ by, text }) });
-  load();
-});
-$('window').addEventListener('change', load);
-load();
-setInterval(load, 3000);
-</script>
+    <section class="section">
+      <div class="section-head"><span class="h-title">Open incidents</span><span class="sub">ordered by age · unacknowledged first</span></div>
+      <div class="card inc">
+        <div class="inc-head"><span>severity</span><span>detector</span><span>node</span><span>title</span><span>age</span><span>status</span><span class="end">actions</span></div>
+        <div class="inc-rows" id="inc-rows"></div>
+      </div>
+    </section>
+  </main>
+</div>
+<script src="fleet.js"></script>
 </body>
 </html>
