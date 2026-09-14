@@ -41,7 +41,8 @@ app.get(['/log', '/logs'], (req, res) => res.sendFile(path.join(__dirname, 'publ
 // the connection handler, so a client that disconnects leaves nothing behind.
 io.on('connection', (socket) => socket.emit('init', pipeline.snapshot()));
 pipeline.bus.on('log', (entry) => io.emit('log', entry));
-pipeline.bus.on('state', () => io.emit('state', pipeline.detectors.state));
+pipeline.bus.on('event', (ev) => io.emit('event', ev));
+pipeline.bus.on('state', () => io.emit('state', { state: pipeline.detectors.state, counters: pipeline.snapshot(0).counters }));
 pipeline.bus.on('alert', (a) => io.emit('alert', a));
 pipeline.bus.on('update', (a) => io.emit('alert', a));
 pipeline.bus.on('resolve', (a) => io.emit('resolve', a));

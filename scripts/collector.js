@@ -67,14 +67,16 @@ app.get('/', (req, res) => {
       active,
     ].join('  ');
   });
-  res.type('text/plain').send([
-    `zero collector  ${new Date(now).toISOString()}  quiet threshold ${QUIET_MS / 1000}s`,
+  const text = [
     '',
     ['node'.padEnd(18), 'state'.padEnd(6), ' seen', 'zebrad'.padEnd(9), 'network'.padEnd(8), '      tip', 'peers', '    rpc', 'mempool', 'active alerts'].join('  '),
     ...rows,
     '',
-    ...[...fleet.values()].flatMap((n) => n.alerts.slice(0, 5).map((a) => `${new Date(a.at).toISOString()}  ${n.label}  ${a.phase.padEnd(12)} ${a.severity.padEnd(8)} ${a.key}: ${a.title}`)),
-  ].join('\n'));
+    ...[...fleet.values()].flatMap((n) => n.alerts.slice(0, 8).map((a) => `${new Date(a.at).toISOString()}  ${n.label}  ${a.phase.padEnd(12)} ${a.severity.padEnd(8)} ${a.key}: ${a.title}`)),
+  ].join('\n');
+  res.type('text/html').send(`<!DOCTYPE html><meta charset="utf-8"><meta http-equiv="refresh" content="3"><title>zero collector</title>
+<style>body{margin:0;background:#0f1115;color:#d7dae0;font:13px/1.5 ui-monospace,Menlo,monospace;padding:18px}pre{margin:0;white-space:pre}h1{font-size:14px;margin:0 0 10px;color:#58a6ff}</style>
+<h1>zero collector · fleet · ${new Date(now).toISOString()} · quiet after ${QUIET_MS / 1000}s</h1><pre>${text.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))}</pre>`);
 });
 
 // Dead man's switch: a sidecar that stops reporting is either dead or the

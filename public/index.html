@@ -13,6 +13,12 @@
       <h1>log-watcher <span id="label"></span></h1>
       <div class="sub"><span id="source"></span> · rpc <span id="rpc-url"></span></div>
     </div>
+    <div class="flow" id="flow">
+      <span title="log lines read">lines <b id="c-lines">0</b></span>
+      <span title="semantic events parsed from those lines">events <b id="c-events">0</b></span>
+      <span title="RPC polls">polls <b id="c-polls">0</b></span>
+      <span title="pages sent (alerts + resolves)">pages <b id="c-pages">0</b></span>
+    </div>
     <div id="status" class="pill">connecting</div>
   </header>
 
@@ -38,6 +44,11 @@
   </section>
 
   <section class="panel">
+    <div class="panel-head"><h2>Events</h2><span class="muted">what the parser made of the log, newest first</span></div>
+    <div id="events" class="events"></div>
+  </section>
+
+  <section class="panel">
     <div class="panel-head">
       <h2>Log</h2>
       <div class="controls">
@@ -59,6 +70,8 @@ let logs = [];
 let active = [];
 let history = [];
 let thresholds = {};
+let events = [];
+let counters = {};
 
 function age(ms) {
   if (ms == null) return '';
@@ -127,6 +140,25 @@ function alertHtml(a, resolved) {
   </div>`;
 }
 
+function renderCounters() {
+  for (const k of ['lines', 'events', 'polls', 'pages']) $('c-' + k).textContent = (counters[k] || 0).toLocaleString();
+}
+
+function eventHtml(e) {
+  return `<div class="ev ${e.type}${e.replay ? ' replay' : ''}"><span class="ts">${fmtTs(e.at)}</span><span class="type">${esc(e.type)}</span><span class="txt">${esc(e.text)}</span>${e.replay ? '<span class="tag">history</span>' : ''}</div>`;
+}
+
+function renderEvents() {
+  $('events').innerHTML = events.length ? events.slice(-40).reverse().map(eventHtml).join('') : '<div class="empty">waiting for the first log line</div>';
+}
+
+function flash(id) {
+  const el = $(id);
+  el.classList.remove('flash');
+  void el.offsetWidth; // restart the animation
+  el.classList.add('flash');
+}
+
 function renderAlerts() {
   $('active-count').textContent = active.length ? active.length + ' active' : '';
   $('alerts').innerHTML = active.length ? active.map((a) => alertHtml(a, false)).join('') : '<div class="empty">nothing active</div>';
@@ -155,19 +187,28 @@ function renderLog() {
 
 socket.on('init', (snap) => {
   state = snap.state; logs = snap.logs; active = snap.alerts.active; history = snap.alerts.history; thresholds = snap.thresholds;
+  events = snap.events || []; counters = snap.counters || {};
   $('label').textContent = snap.label; $('source').textContent = snap.source; $('rpc-url').textContent = snap.rpcUrl;
-  renderState(); renderAlerts(); renderLog();
+  renderState(); renderAlerts(); renderLog(); renderEvents(); renderCounters();
 });
-socket.on('state', (s) => { state = s; renderState(); });
+socket.on('state', (m) => { state = m.state || m; if (m.counters) counters = m.counters; renderState(); renderCounters(); });
+socket.on('event', (e) => {
+  events.push(e); if (events.length > 200) events.shift();
+  $('events').insertAdjacentHTML('afterbegin', eventHtml(e));
+  while ($('events').children.length > 40) $('events').lastChild.remove();
+  if (!e.replay) flash('c-events');
+  if (e.type === 'block_committed' && !e.replay) flash('tip');
+});
 socket.on('log', (e) => {
   logs.push(e); if (logs.length > 2000) logs.shift();
+  flash('c-lines');
   if (passes(e)) { const el = $('log'); el.insertAdjacentHTML('beforeend', logLineHtml(e)); while (el.children.length > 400) el.firstChild.remove(); if ($('follow').checked) el.scrollTop = el.scrollHeight; }
 });
 socket.on('alert', (a) => {
   const upsert = (arr) => { const i = arr.findIndex((x) => x.id === a.id); if (i === -1) arr.unshift(a); else arr[i] = a; };
   if (!a.transient && !a.resolved) upsert(active);
   upsert(history);
-  renderAlerts(); renderState();
+  renderAlerts(); renderState(); flash('c-pages');
 });
 socket.on('resolve', (a) => { active = active.filter((x) => x.key !== a.key); const i = history.findIndex((x) => x.id === a.id); if (i !== -1) history[i] = a; else history.unshift(a); renderAlerts(); renderState(); });
 socket.on('disconnect', () => { $('status').textContent = 'disconnected'; $('status').className = 'pill bad'; });

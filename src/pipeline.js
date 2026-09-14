@@ -21,6 +21,8 @@ const { makeTriage } = require('./triage');
 function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
   const bus = new EventEmitter();
   const logRing = new Ring(cfg.ringSize);
+  const eventRing = new Ring(200);
+  const counters = { lines: 0, events: 0, polls: 0, pages: 0 };
   const detectors = new Detectors(cfg, { now });
   const rpc = new ZebraRpc(cfg.rpc);
   const triage = cfg.triage.apiKey ? makeTriage(cfg.triage) : null;
@@ -49,6 +51,8 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
   detectors.on('alert', (a) => alerts.raise(a));
   detectors.on('resolve', (r) => alerts.resolve(r));
   for (const ev of ['alert', 'update', 'resolve']) alerts.on(ev, (a) => bus.emit(ev, a));
+  alerts.on('alert', () => { counters.pages++; });
+  alerts.on('resolve', () => { counters.pages++; });
   alerts.on('error', (err) => bus.emit('error', err));
 
   let lastEntry = null;
@@ -70,6 +74,7 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
       return;
     }
     lastEntry = parsed;
+    counters.lines++;
     // Node time vs. our time: a growing gap means the log stream itself is
     // lagging (docker daemon under pressure, slow disk), which is a symptom.
     parsed.receivedAt = now();
@@ -82,10 +87,28 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
     detectors.noteLine(replay, parsed.receivedAt);
     for (const ev of toEvents(parsed)) {
       detectors.onEvent(ev, { replay, at: parsed.time });
-      bus.emit('event', ev);
+      const shown = describeEvent(ev, parsed, replay);
+      eventRing.push(shown);
+      counters.events++;
+      bus.emit('event', shown);
       if (ev.type === 'block_committed' && !replay) blockDetail(ev);
     }
     bus.emit('state');
+  }
+
+  // One line per semantic event for the dashboard's flow panel: what the
+  // parser made of a log line, before the detectors decided anything.
+  function describeEvent(ev, entry, replay) {
+    const d = { type: ev.type, at: entry.time, receivedAt: entry.receivedAt, replay, text: '' };
+    switch (ev.type) {
+      case 'block_committed': d.text = `block ${ev.height}${ev.mined ? ' (mined here)' : ''} ${ev.hash ? ev.hash.slice(0, 12) + '…' : ''}`; break;
+      case 'sync_progress': d.text = `${ev.state}${ev.percent != null ? ` ${ev.percent}%` : ''}${ev.height != null ? ` @ ${ev.height}` : ''}${ev.remaining ? `, ${ev.remaining} left` : ''}`; break;
+      case 'node_started': d.text = 'startup banner'; break;
+      case 'end_of_support': d.text = `halts at ${ev.haltHeight}`; break;
+      case 'log_warn': case 'log_error': d.text = `${entry.target}: ${entry.message.slice(0, 90)}`; break;
+      default: d.text = ev.message || '';
+    }
+    return d;
   }
 
   async function blockDetail(ev) {
@@ -105,6 +128,7 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
   // context and must not flip RPC to "down" if one of them is missing on an
   // older release.
   async function poll() {
+    counters.polls++;
     const sample = { ok: false, ms: null, error: null };
     try {
       const { result, ms } = await rpc.getBlockchainInfo();
@@ -219,6 +243,8 @@ function createPipeline(cfg, { now = Date.now, sinks, source } = {}) {
       state: detectors.state,
       alerts: alerts.list(),
       logs: logRing.last(logLines),
+      events: eventRing.last(logLines ? 60 : 0),
+      counters,
       startedAt: detectors.state.startedAt,
     };
   }
