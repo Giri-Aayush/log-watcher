@@ -105,6 +105,13 @@ The `getblocktemplate` card on the sidecar dashboard is on in the demo
 (`LW_GBT_POLL_MS=10000`): that is the call a pool makes, so its latency is the
 pool's experience rather than a proxy for it.
 
+**5c′. Ask Claude (optional, 30 s).** With `ANTHROPIC_API_KEY` exported in the
+terminal that runs `attach`, the incident page has **Ask Claude for an
+analysis**. On the regtest `sync_stalled` warning it should say, in effect,
+"expected on regtest — Zebra estimates the tip from the wall clock; no action",
+because it sees the network and the other node. Say: the model gets the fleet
+and the history, not just one node's log; and it writes a draft, it never sends.
+
 **5d. Close the loop with the customer (1 min).** On the incident page (or
 `GET /api/incidents/<id>/report`), open the **incident report**: a Markdown
 write-up generated from the record — what happened, when we detected it and how

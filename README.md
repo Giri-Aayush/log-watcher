@@ -57,6 +57,20 @@ Every pattern comes from a running node or from `zebrad`'s source
 (`components/sync/progress.rs`, `end_of_support.rs`); `test/fixtures.js` holds
 the verbatim lines.
 
+## The knowledge base
+
+The part that compounds. Any incident can be promoted to a **known issue**
+(`POST /api/incidents/<id>/promote`): a symptom signature — detector key,
+network, affected zebrad versions (prefix match), log substrings, evidence
+values — plus cause, fix, workaround, references, and a status (draft →
+confirmed → retired). Every new incident is matched against the signatures on
+arrival and carries its matches (`knownIssueDetails`), the analysis prompt
+gets them, and the analytics report the match rate: the share of incidents
+that arrived with a known answer. Each entry exports as Markdown
+(`/api/known-issues/<id>/export`, `?internal=1` to include which nodes), so the
+public knowledge base is a by-product of doing the support. `GET /api/versions`
+lists which nodes run which zebrad build — the upgrade-outreach list.
+
 ## Latency budget
 
 Detection happens on the node's box and the page goes straight to the sink — there
@@ -110,10 +124,15 @@ The page itself is one HTTP POST to a loopback Signal bridge: sub-second.
   the last five), and the hostname is not sent unless `LW_SHARE_HOST=true`. Zebra
   itself already redacts peer addresses in its log. Every exported bundle states
   the policy it was produced under.
-- **A human sends every message to an operator.** With `ANTHROPIC_API_KEY` set,
-  each non-info alert gets a first-pass triage draft (probable cause, what to
-  check, a regtest repro sketch, a message to the operator) attached in the
-  dashboard. It is a draft. Nothing is sent from it.
+- **A human sends every message to an operator.** On the collector, "Ask Claude
+  for an analysis" on an incident runs the model over the incident, the
+  page-time bundle, the other nodes on the same network, this node's history
+  and the last hour of heartbeats, and attaches a draft: assessment (node-local,
+  network-wide, or expected on this network), probable cause, what to check, a
+  regtest repro, a message to the operator, confidence. Credentials are Zero's
+  (`ANTHROPIC_API_KEY` in the collector's environment), never the customer's.
+  The sidecar can do a bundle-only version on the box if it is given a key. In
+  both cases it is a draft. Nothing is sent from it.
 
 ## Run it
 
@@ -201,7 +220,11 @@ serves the Overview at `/` (built from the mock in [design/](design/)): p50/p95
 of each gap over a window, oldest unacknowledged, availability, incidents per
 hour, the fleet table, and the open incidents with Ack / Responded / Close.
 Every value on it comes from `/api/analytics`, `/api/fleet` and
-`/api/incidents`. `GET /api/incidents/<id>/report` renders the customer-facing
+`/api/incidents`. Each incident can record what changed in Zero because of it (`POST
+…/improvement`: a detector, a threshold, a runbook line, an upstream PR); the
+analytics report how many closed incidents left one behind, which is the JD's
+"each engagement ends as a permanent improvement" as a number.
+`GET /api/incidents/<id>/report` renders the customer-facing
 incident report (Markdown: summary, timeline, response times, evidence, node at
 page time, the engineer's notes as analysis, recommendations) from the same
 record; `POST …/report` marks it sent. Every

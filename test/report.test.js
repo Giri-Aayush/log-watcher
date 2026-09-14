@@ -34,6 +34,12 @@ test('a resolved incident reads as a complete customer report', () => {
   assert.match(md, /shared as "summary"/);
 });
 
+test('improvements appear in the report as what changed in Zero', () => {
+  const md = incidentReport({ ...inc, improvements: [{ at: T0 + 15 * MIN, by: 'aayush', text: 'peers_low now waits two polls; runbook updated' }], notes: [...inc.notes, { at: T0 + 15 * MIN, by: 'aayush', action: 'improvement', text: 'peers_low now waits two polls; runbook updated' }] }, { bundle, now: T0 + 20 * MIN });
+  assert.match(md, /## What changed in Zero as a result\n\n- peers_low now waits two polls; runbook updated/);
+  assert.match(md, /Improvement recorded by aayush/);
+});
+
 test('an open, unacknowledged incident says so instead of inventing times', () => {
   const md = incidentReport({ ...inc, ackedAt: null, ackedBy: null, respondedAt: null, resolvedAt: null, notes: [], updates: [{ phase: 'NEW', at: T0 + 2000 }] }, { now: T0 + 5 * MIN });
   assert.match(md, /\*\*Status:\*\* open/);
