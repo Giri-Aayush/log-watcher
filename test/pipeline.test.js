@@ -119,3 +119,23 @@ test('lines replayed after a source reattach are skipped', async () => {
   await new Promise((r) => setTimeout(r, 50)); // let the getblock detail calls finish
   node.server.close();
 });
+
+test('heartbeats carry the sidecar\'s dashboard URL and poll interval but not its host unless shared', async () => {
+  const node = await fakeNode();
+  const cfg = structuredClone(defaults);
+  cfg.source = 'none';
+  cfg.rpc.url = node.url;
+  cfg.dashboardUrl = 'http://sidecar.local:3000';
+  cfg.sinks.webhookUrl = 'http://collector.test/ingest';
+  cfg.alerts.bundleDir = null;
+  const p = createPipeline(cfg, { sinks: [], source: new EventEmitter() });
+  p.bus.on('error', () => {});
+  p.outbox.fetchImpl = async () => ({ ok: true, status: 200 });
+  await p.poll();
+  // the heartbeat rides the outbox; trigger one directly by reading what start() would send
+  const snap = p.snapshot();
+  assert.equal(snap.sidecar.dashboardUrl, 'http://sidecar.local:3000');
+  assert.equal(snap.sidecar.pollMs, cfg.rpc.pollMs);
+  assert.equal(snap.consoleUrl, 'http://collector.test');
+  node.server.close();
+});

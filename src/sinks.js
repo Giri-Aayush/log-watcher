@@ -31,13 +31,14 @@ function outboxSink(outbox, label, share) {
     name: 'collector',
     send: async ({ alert, phase, text }) => {
       const bundle = phase === 'RESOLVED' && alert.resolvedBundle ? alert.resolvedBundle : alert.bundle;
-      outbox.push({
+      const seq = outbox.push({
         phase,
         label,
         text,
         alert: { ...alert, bundle: undefined, resolvedBundle: undefined },
         bundle: bundle ? applySharePolicy(bundle, share) : null,
       });
+      if (phase === 'NEW' && seq != null) alert.outboxSeq = seq; // confirmed by the outbox's 'delivered' event
     },
   };
 }

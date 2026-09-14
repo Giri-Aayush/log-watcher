@@ -7,6 +7,7 @@ const fs = require('fs');
 const defaults = {
   label: 'zebra',
   port: 3000,
+  dashboardUrl: null, // how Zero can reach this sidecar's own page, if at all (LW_DASHBOARD_URL); sent in heartbeats
   source: 'file', // file | docker | journald | command | none
   logFile: null,
   container: 'zebra',
@@ -74,7 +75,7 @@ const defaults = {
 
 // LW_RPC_URL -> rpc.url, LW_TIP_STALL_MIN -> thresholds.tipStallMin, etc.
 const envMap = {
-  LW_LABEL: 'label', LW_PORT: 'port', LW_SOURCE: 'source', LW_LOG_FILE: 'logFile',
+  LW_LABEL: 'label', LW_PORT: 'port', LW_DASHBOARD_URL: 'dashboardUrl', LW_SOURCE: 'source', LW_LOG_FILE: 'logFile',
   LW_CONTAINER: 'container', LW_UNIT: 'unit', LW_COMMAND: 'command', LW_REPLAY_AGE_S: 'replayAgeS',
   LW_RPC_URL: 'rpc.url', LW_RPC_COOKIE: 'rpc.cookieFile', LW_RPC_USER: 'rpc.user', LW_RPC_PASS: 'rpc.pass',
   LW_RPC_TIMEOUT_MS: 'rpc.timeoutMs', LW_POLL_MS: 'rpc.pollMs', LW_BLOCK_DETAIL: 'rpc.blockDetail', LW_GBT_POLL_MS: 'rpc.gbtPollMs',

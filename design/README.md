@@ -18,5 +18,11 @@ Source of truth for the console UI, exported from the Claude Design project
 - `Zero Incident.dc.html` — the incident detail screen (lifecycle strip, actions,
   RPC latency around the page, log excerpt, triage draft, audit trail).
 
-Screens not yet exported: `Zero Node`, `Zero Sidecar`,
-`Zero Components`.
+- `Zero Node.dc.html` — node detail (four series charts, log-lag sparkline,
+  incident history, sidecar facts, thresholds in effect).
+- `Zero Sidecar.dc.html` — the sidecar's own page on the customer's box (the
+  operator view): tiles, active alerts with `next:`, last block, the parsed
+  event feed, the live log with a level filter.
+
+`Zero Components.dc.html` is the design-system sheet; it is not a product
+screen and is not imported.
