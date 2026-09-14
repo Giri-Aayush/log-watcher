@@ -184,9 +184,10 @@ class Detectors extends EventEmitter {
       return;
     }
 
-    if (r.ok === false) this.resolve('rpc_down', `RPC back after ${r.failures} failures (${sample.ms}ms)`);
+    const failures = r.failures;
     r.ok = true;
     r.failures = 0;
+    if (failures) this.resolve('rpc_down', `RPC back after ${failures} failures (${sample.ms}ms)`);
     r.lastError = null;
     r.ms = sample.ms;
     r.at = now;
@@ -281,6 +282,8 @@ class Detectors extends EventEmitter {
 
   // Result of getblock(hash, 1) for a block we just saw committed.
   onBlockDetail(block, seenAt) {
+    // getblock calls for a burst of blocks resolve in any order; keep the newest.
+    if (this.state.lastBlock && block.height < this.state.lastBlock.height) return;
     const lagS = block.time ? Math.round(seenAt / 1000 - block.time) : null;
     const txs = block.nTx != null ? block.nTx : Array.isArray(block.tx) ? block.tx.length : null;
     this.state.lastBlock = { height: block.height, hash: block.hash, txs, size: block.size, time: block.time, lagS };
