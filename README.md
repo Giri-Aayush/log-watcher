@@ -36,6 +36,7 @@ zebrad ──log (file / docker / journald)──▶ parse ──▶ events ─�
 | `error_burst` | log | N WARN/ERROR lines inside a sliding window | 10 / 60 s |
 | `log_error` | log | any ERROR line | — |
 | `end_of_support` | log + RPC | this release's halt height is within N blocks of the tip | 32256 (~4 weeks) |
+| `tip_rewound` | RPC | the node reports a lower height than before (unclean restart lost non-finalized blocks) | — |
 | `node_restarted` | log | the startup banner appeared | — |
 | `version_changed` | RPC | `getinfo.build` changed | — |
 | `node_reported_error` | RPC | `getinfo.errors` changed (works with no log access at all) | — |
@@ -76,6 +77,9 @@ The page itself is one HTTP POST to a loopback Signal bridge: sub-second.
 - **Panics are not in the log file.** `zebrad` writes them to stderr. A dead node
   looks like silence in the log and a refused connection on RPC, so liveness is
   judged from RPC, never from the log going quiet.
+- **A stale cookie closes the socket.** Zebra regenerates the RPC cookie on every
+  start and answers an old one by dropping the connection, not with a 401. The
+  client re-reads the file when its mtime changes and after any network error.
 - **Old lines are history.** On startup (and `docker logs --tail`) the sidecar reads
   back to build state, but anything older than `replayAgeS` (60 s) cannot page. A
   restart that happened an hour ago is context, not an incident.
@@ -89,6 +93,17 @@ The page itself is one HTTP POST to a loopback Signal bridge: sub-second.
   dashboard. It is a draft. Nothing is sent from it.
 
 ## Run it
+
+### Live demo on a real node
+
+```bash
+scripts/demo-live.sh up          # regtest zebrad + sidecar + collector, opens both dashboards
+scripts/demo-live.sh mine 3      # blocks arrive
+scripts/demo-live.sh kill        # rpc_down
+scripts/demo-live.sh revive      # node_restarted, RESOLVED, tip_rewound
+```
+
+[DEMO.md](DEMO.md) is the runbook: what to run, what appears, what to say.
 
 ### Demo, no node needed
 
