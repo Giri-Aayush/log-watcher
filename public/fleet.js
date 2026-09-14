@@ -291,7 +291,7 @@
           + '<button type="button" class="btn" data-act="ack"' + (acked ? ' disabled' : '') + '>Ack</button>'
           + '<button type="button" class="btn" data-act="respond"' + (responded ? ' disabled' : '') + '>Responded</button>'
           + '<button type="button" class="btn close" data-act="close">Close</button>'
-          + '<a href="/api/incidents/' + encodeURIComponent(i.id) + '" target="_blank" rel="noopener" title="incident detail: coming">open →</a>'
+          + '<a href="/incident.html?id=' + encodeURIComponent(i.id) + '">open →</a>'
           + '</div></div>';
       }).join('');
     }

@@ -191,3 +191,27 @@ test('report endpoint data: marking a report sent lands in the record', () => {
   assert.equal(inc.reportSentAt, h.now());
   assert.equal(inc.notes[0].action, 'report');
 });
+
+test('GET /api/incidents/:id carries the collector clock and the latest bundle; an unknown id is a 404', async () => {
+  const { createCollector } = require('../src/collector');
+  let t = T0;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lw-collector-http-'));
+  const c = createCollector({ dir, now: () => t });
+  const server = await new Promise((resolve) => { const s = c.app.listen(0, () => resolve(s)); });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    c.store.ingest({ phase: 'NEW', label: 'pool-1', alert: stall(), bundle: { label: 'pool-1', logs: ['l1'] } });
+    t += 5 * MIN;
+    const r = await fetch(`${base}/api/incidents/inc-1`);
+    assert.equal(r.status, 200);
+    const body = await r.json();
+    assert.equal(body.at, T0 + 5 * MIN, 'at is the collector clock at response time');
+    assert.equal(body.receivedAt, T0);
+    assert.deepEqual(body.bundle.logs, ['l1']);
+    const missing = await fetch(`${base}/api/incidents/nope`);
+    assert.equal(missing.status, 404);
+  } finally {
+    c.stop();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

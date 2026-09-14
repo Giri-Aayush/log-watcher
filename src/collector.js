@@ -399,7 +399,9 @@ function createCollector({ dir, quietMs = 60000, now = Date.now, publicDir = pat
     if (!inc) return res.status(404).json({ error: 'not found' });
     let bundle = null;
     try { bundle = JSON.parse(fs.readFileSync(path.join(store.dir, inc.latestBundleFile || inc.bundleFile), 'utf8')); } catch { /* no bundle */ }
-    res.json({ ...inc, bundle });
+    // `at` is the collector clock now, so the page can tick an open stage's
+    // duration against the same clock ackedAt/receivedAt are on
+    res.json({ ...inc, bundle, at: store.now() });
   });
   app.get('/api/incidents/:id/report', (req, res) => {
     const inc = store.incidents.get(req.params.id);
