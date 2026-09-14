@@ -197,8 +197,11 @@ bundle: bundles/2026-09-14T11-28-33-120Z-tip_stalled-7.json
 `scripts/collector.js` is the other end of `LW_WEBHOOK_URL`. It keeps an
 incident per stateful alert with the timestamps the response metrics are built
 from — onset, paged, acknowledged, responded (told the operator), resolved — and
-serves them at `/`: p50/p95 of each gap over a window, oldest unacknowledged,
-availability per node, a fleet table, and Ack / Responded / Close actions. Every
+serves the Overview at `/` (built from the mock in [design/](design/)): p50/p95
+of each gap over a window, oldest unacknowledged, availability, incidents per
+hour, the fleet table, and the open incidents with Ack / Responded / Close.
+Every value on it comes from `/api/analytics`, `/api/fleet` and
+`/api/incidents`. Every
 bundle is stored under `collected/bundles/<label>/`; heartbeats become a per-node
 series (`/api/series/<label>`). A node that stops sending heartbeats is marked
 quiet after 60 s. One process, JSON on disk, no auth: the shape of the design,
