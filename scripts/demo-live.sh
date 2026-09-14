@@ -3,6 +3,9 @@
 # levers to make things happen while people watch.
 #
 #   scripts/demo-live.sh up        # start all three, open the dashboards
+#   -- or, node in your own terminal so people can watch it --
+#   scripts/demo-live.sh node      # write the config, print the zebrad command for terminal 1
+#   scripts/demo-live.sh attach    # terminal 2: collector + sidecar onto that node, open the dashboards
 #   scripts/demo-live.sh mine 3    # three blocks -> block_committed x3, tip moves, block detail fills in
 #   (wait ~60s)                    # -> tip_stalled CRITICAL (LW_TIP_STALL_MIN=1 for the demo)
 #   scripts/demo-live.sh mine 1    # -> RESOLVED tip_stalled
@@ -62,9 +65,37 @@ case "${1:-}" in
     command -v open >/dev/null && open "http://localhost:$SIDECAR_PORT/" "http://localhost:$COLLECTOR_PORT/" || true
     echo; sed -n '4,12p' "$0" | sed 's/^# \{0,3\}//'
     ;;
+  node)
+    scripts/regtest.sh config stdout
+    echo; say "then, in another terminal: scripts/demo-live.sh attach" ;;
+  attach)
+    preflight_attach() {
+      command -v node >/dev/null && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 20 ] || { echo "need node >= 20"; exit 1; }
+      [ -d node_modules ] || { say "installing dependencies"; npm install --no-audit --no-fund >/dev/null; }
+      for p in "$SIDECAR_PORT" "$COLLECTOR_PORT"; do port_free "$p" || { echo "port $p is in use: $(lsof -nP -iTCP:$p -sTCP:LISTEN | tail -1 | awk '{print $1, $2}')"; exit 1; }; done
+      [ -f "$DIR/zebrad.log" ] || { echo "no $DIR/zebrad.log yet — start the node first (scripts/demo-live.sh node)"; exit 1; }
+      for _ in $(seq 1 20); do [ -f "$DIR/.cookie" ] && curl -s -m 3 -u "$(cat "$DIR/.cookie")" -H 'content-type: application/json' --data-binary '{"jsonrpc":"2.0","id":1,"method":"getblockcount","params":[]}' "http://127.0.0.1:$RPC_PORT/" | grep -q result && return 0; sleep 0.5; done
+      echo "zebrad RPC not answering on :$RPC_PORT — is the node running?"; exit 1
+    }
+    preflight_attach
+    say "1/2 collector on :$COLLECTOR_PORT"
+    alive collector || { COLLECTOR_PORT="$COLLECTOR_PORT" COLLECTOR_DIR="$DIR/collected" nohup node scripts/collector.js > "$DIR/collector.out" 2>&1 & echo $! > "$DIR/collector.pid"; }
+    say "2/2 sidecar on :$SIDECAR_PORT"; start_sidecar sidecar "${LW_LABEL:-regtest-$(hostname -s)}" "$SIDECAR_PORT"
+    sleep 2
+    say "dashboard  http://localhost:$SIDECAR_PORT/"
+    say "collector  http://localhost:$COLLECTOR_PORT/"
+    command -v open >/dev/null && open "http://localhost:$SIDECAR_PORT/" "http://localhost:$COLLECTOR_PORT/" || true
+    echo; echo "mine / kill / revive: for a node you started yourself, kill it with Ctrl-C (clean) or"
+    echo "  kill -9 \$(pgrep -f 'zebrad -c $DIR/zebrad.toml')   (unclean: loses non-finalized blocks -> tip_rewound)"
+    echo "and revive it by running the same zebrad command again in that terminal." ;;
   mine)     scripts/regtest.sh mine "${2:-1}" ;;
-  kill)     kill -9 "$(cat "$DIR/zebrad.pid")" && rm -f "$DIR/zebrad.pid" && say "zebrad killed with SIGKILL — watch rpc_down" ;;
-  revive)   scripts/regtest.sh start && say "zebrad back — watch the startup banner, node_restarted and RESOLVED rpc_down" ;;
+  kill)
+    if [ -f "$DIR/zebrad.pid" ]; then kill -9 "$(cat "$DIR/zebrad.pid")" && rm -f "$DIR/zebrad.pid";
+    else pkill -9 -f "zebrad -c $DIR/zebrad.toml" || { echo "no zebrad found"; exit 1; }; fi
+    say "zebrad killed with SIGKILL — watch rpc_down" ;;
+  revive)
+    if grep -q '^log_file' "$DIR/zebrad.toml" 2>/dev/null; then scripts/regtest.sh start && say "zebrad back — watch the startup banner, node_restarted and RESOLVED rpc_down";
+    else say "the node runs in your terminal: run the zebrad command there again"; scripts/regtest.sh config stdout | tail -1; fi ;;
   twin)
     start_sidecar twin "regtest-b" 3002; sleep 1
     say "second sidecar on http://localhost:3002/ (label regtest-b). Stop mining for a minute: both page tip_stalled, the collector shows one network_tip_stalled." ;;

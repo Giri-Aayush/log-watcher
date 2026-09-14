@@ -181,3 +181,13 @@ test('correlation ignores other keys and other networks', () => {
   warn('m1', 3, 'm1-2'); warn('m2', 3, 'm2-2');
   assert.equal(h.store.analytics().totals.suppressed, 0);
 });
+
+test('report endpoint data: marking a report sent lands in the record', () => {
+  const h = harness();
+  h.alert('NEW', stall());
+  h.advance(MIN);
+  const inc = h.store.act('inc-1', 'report', { by: 'aayush' });
+  assert.equal(inc.reportSentBy, 'aayush');
+  assert.equal(inc.reportSentAt, h.now());
+  assert.equal(inc.notes[0].action, 'report');
+});

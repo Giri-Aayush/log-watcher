@@ -6,11 +6,22 @@ About eight minutes end to end.
 
 ## Before the call
 
+Two terminals, so the node is visibly a real process:
+
 ```bash
-scripts/demo-live.sh down        # if anything is left over
-rm -rf .regtest                  # fresh node, fresh log, height 0
-scripts/demo-live.sh up          # ~10 s; opens the two tabs
+# terminal 1 — the node. Prints the exact zebrad command; run it and leave it scrolling.
+scripts/demo-live.sh down; rm -rf .regtest
+scripts/demo-live.sh node
+zebrad -c .regtest/zebrad.toml start 2>&1 | tee .regtest/zebrad.log
+
+# terminal 2 — attach the sidecar and the collector to it; opens both tabs.
+scripts/demo-live.sh attach
 ```
+
+(`scripts/demo-live.sh up` does all of it in one terminal if you prefer.) With a
+node you started yourself, "kill" is `kill -9 $(pgrep -f 'zebrad -c')` in terminal 2
+(unclean, so the non-finalized blocks are lost and `tip_rewound` shows) or Ctrl-C in
+terminal 1 (clean), and "revive" is running the zebrad command again in terminal 1.
 
 Tabs: **sidecar** <http://localhost:3000> and **collector** <http://localhost:4000>.
 Check once that `scripts/demo-live.sh mine 1` moves the tip. Then leave it — a
@@ -93,6 +104,15 @@ resolves it.
 The `getblocktemplate` card on the sidecar dashboard is on in the demo
 (`LW_GBT_POLL_MS=10000`): that is the call a pool makes, so its latency is the
 pool's experience rather than a proxy for it.
+
+**5d. Close the loop with the customer (1 min).** On the incident page (or
+`GET /api/incidents/<id>/report`), open the **incident report**: a Markdown
+write-up generated from the record — what happened, when we detected it and how
+fast we acknowledged, what we told the operator, when it cleared, what we
+recommend. Add a note first ("two outbound peers dropped; node was partitioned")
+and it appears under *Analysis*. Click **Report sent**: that lands in the audit
+trail with your name. Say: this is the artefact the customer actually receives,
+and it is generated, not typed, so it is never missing the timeline.
 
 **6. Real network (optional, 1 min).**
 ```bash

@@ -201,7 +201,10 @@ serves the Overview at `/` (built from the mock in [design/](design/)): p50/p95
 of each gap over a window, oldest unacknowledged, availability, incidents per
 hour, the fleet table, and the open incidents with Ack / Responded / Close.
 Every value on it comes from `/api/analytics`, `/api/fleet` and
-`/api/incidents`. Every
+`/api/incidents`. `GET /api/incidents/<id>/report` renders the customer-facing
+incident report (Markdown: summary, timeline, response times, evidence, node at
+page time, the engineer's notes as analysis, recommendations) from the same
+record; `POST …/report` marks it sent. Every
 bundle is stored under `collected/bundles/<label>/`; heartbeats become a per-node
 series (`/api/series/<label>`). A node that stops sending heartbeats is marked
 quiet after 60 s. One process, JSON on disk, no auth: the shape of the design,

@@ -3,6 +3,8 @@
 # No peers, no sync: blocks exist when you mine them.
 #
 #   scripts/regtest.sh start          # zebrad regtest in .regtest/, RPC on :18932 with cookie auth
+#   scripts/regtest.sh config stdout  # only write .regtest/zebrad.toml (logs to stdout) and print the command
+#                                     #   to run the node yourself, in your own terminal
 #   scripts/regtest.sh mine 3         # mine 3 blocks (the sidecar sees "sending mined block broadcast")
 #   scripts/regtest.sh env            # print the LW_* exports for `npm start`
 #   scripts/regtest.sh stop
@@ -33,12 +35,14 @@ miner_address() {
     while (n > 0n) { s = A[Number(n % 58n)] + s; n /= 58n; } console.log(s)'
 }
 
-case "${1:-}" in
-  start)
-    command -v "$ZEBRAD" >/dev/null || { echo "zebrad not found (cargo install zebrad, or ZEBRAD=/path)"; exit 1; }
-    mkdir -p "$DIR"
-    if [ -f "$DIR/zebrad.pid" ] && kill -0 "$(cat "$DIR/zebrad.pid")" 2>/dev/null; then echo "already running (pid $(cat "$DIR/zebrad.pid"))"; exit 0; fi
-    cat > "$DIR/zebrad.toml" <<TOML
+# write_config file|stdout — where zebrad's log goes. "stdout" is for running the
+# node in a terminal people can watch; the sidecar then tails a `tee` copy.
+write_config() {
+  mkdir -p "$DIR"
+  local tracing
+  if [ "${1:-file}" = "stdout" ]; then tracing="use_color = true"; else tracing="log_file = \"$DIR/zebrad.log\"
+use_color = false"; fi
+  cat > "$DIR/zebrad.toml" <<TOML
 [network]
 network = "Regtest"
 listen_addr = "127.0.0.1:$P2P_PORT"
@@ -58,9 +62,22 @@ cookie_dir = "$DIR"
 miner_address = "$(miner_address)"
 
 [tracing]
-log_file = "$DIR/zebrad.log"
-use_color = false
+$tracing
 TOML
+}
+
+case "${1:-}" in
+  config)
+    write_config "${2:-file}"
+    echo "wrote $DIR/zebrad.toml (log -> ${2:-file})"
+    if [ "${2:-file}" = "stdout" ]; then
+      echo "run the node in your terminal with:"
+      echo "  $ZEBRAD -c $DIR/zebrad.toml start 2>&1 | tee $DIR/zebrad.log"
+    fi ;;
+  start)
+    command -v "$ZEBRAD" >/dev/null || { echo "zebrad not found (cargo install zebrad, or ZEBRAD=/path)"; exit 1; }
+    if [ -f "$DIR/zebrad.pid" ] && kill -0 "$(cat "$DIR/zebrad.pid")" 2>/dev/null; then echo "already running (pid $(cat "$DIR/zebrad.pid"))"; exit 0; fi
+    write_config file
     nohup "$ZEBRAD" -c "$DIR/zebrad.toml" start > "$DIR/zebrad.stdout" 2>&1 &
     echo $! > "$DIR/zebrad.pid"
     for _ in $(seq 1 30); do

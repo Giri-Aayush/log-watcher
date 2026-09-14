@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
+const { incidentReport } = require('./report');
 
 // The Zero-side end of the sidecar's webhook, and the incident record.
 //
@@ -255,6 +256,10 @@ class Store {
         break;
       case 'note':
         break;
+      case 'report':
+        inc.reportSentAt = now;
+        inc.reportSentBy = by;
+        break;
       default:
         throw new Error(`unknown action ${action}`);
     }
@@ -395,6 +400,14 @@ function createCollector({ dir, quietMs = 60000, now = Date.now, publicDir = pat
     let bundle = null;
     try { bundle = JSON.parse(fs.readFileSync(path.join(store.dir, inc.latestBundleFile || inc.bundleFile), 'utf8')); } catch { /* no bundle */ }
     res.json({ ...inc, bundle });
+  });
+  app.get('/api/incidents/:id/report', (req, res) => {
+    const inc = store.incidents.get(req.params.id);
+    if (!inc) return res.status(404).json({ error: 'not found' });
+    let bundle = null;
+    try { bundle = JSON.parse(fs.readFileSync(path.join(store.dir, inc.bundleFile), 'utf8')); } catch { /* network incidents have none */ }
+    const members = (inc.members || []).map((id) => store.incidents.get(id)).filter(Boolean);
+    res.type('text/markdown').send(incidentReport(inc, { bundle, members, now: store.now() }));
   });
   app.post('/api/incidents/:id/:action', (req, res) => {
     try {
