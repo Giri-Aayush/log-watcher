@@ -3,6 +3,7 @@ const path = require('path');
 const express = require('express');
 const { incidentReport } = require('./report');
 const { makeIncidentTriage, triageAvailable } = require('./triage');
+const kb = require('./knowledge');
 
 // The Zero-side end of the sidecar's webhook, and the incident record.
 //
@@ -44,6 +45,7 @@ class Store {
     this.nodes = new Map();
     this.incidents = new Map();
     this.series = new Map();
+    this.knownIssues = new Map();
     this.listeners = new Set();
     fs.mkdirSync(path.join(dir, 'bundles'), { recursive: true });
     this.load();
@@ -55,6 +57,9 @@ class Store {
     } catch { /* first run */ }
     try {
       for (const inc of JSON.parse(fs.readFileSync(path.join(this.dir, 'incidents.json'), 'utf8'))) this.incidents.set(inc.id, inc);
+    } catch { /* first run */ }
+    try {
+      for (const ki of JSON.parse(fs.readFileSync(path.join(this.dir, 'known-issues.json'), 'utf8'))) this.knownIssues.set(ki.id, ki);
     } catch { /* first run */ }
     try {
       for (const [label, samples] of Object.entries(JSON.parse(fs.readFileSync(path.join(this.dir, 'series.json'), 'utf8')))) this.series.set(label, samples);
@@ -74,6 +79,7 @@ class Store {
     const nodes = [...this.nodes.values()].map(({ heartbeat, quiet, ...rest }) => rest); // heartbeat is transient
     fs.writeFileSync(path.join(this.dir, 'nodes.json'), JSON.stringify(nodes));
     fs.writeFileSync(path.join(this.dir, 'incidents.json'), JSON.stringify([...this.incidents.values()]));
+    fs.writeFileSync(path.join(this.dir, 'known-issues.json'), JSON.stringify([...this.knownIssues.values()]));
     fs.writeFileSync(path.join(this.dir, 'series.json'), JSON.stringify(Object.fromEntries(this.series)));
   }
 
@@ -179,6 +185,7 @@ class Store {
       inc.latestBundleFile = path.relative(this.dir, file);
     }
     if (msg.bundle && msg.bundle.node && msg.bundle.node.network) n.network = msg.bundle.node.network;
+    if (msg.phase === 'NEW') this.matchKnownIssues(inc, msg.bundle);
     this.correlate(inc.key, n.network);
     this.save();
     this.emit('incident', inc);
@@ -279,7 +286,69 @@ class Store {
         share: bundle.share, logs: (bundle.logs || []).slice(-40),
       },
       network, otherNodesOnNetwork: fleet, recentHistory: history, lastHour: series,
+      knownIssues: (inc.knownIssues || []).map((id) => this.knownIssues.get(id)).filter(Boolean).map((ki) => ({ title: ki.title, cause: ki.cause, fix: ki.fix, workaround: ki.workaround, status: ki.status, seen: ki.occurrences.length })),
     };
+  }
+
+  // ---- knowledge base ------------------------------------------------------
+
+  readBundle(inc) {
+    try { return JSON.parse(fs.readFileSync(path.join(this.dir, inc.bundleFile), 'utf8')); } catch { return null; }
+  }
+
+  matchKnownIssues(inc, bundle = undefined) {
+    const b = bundle === undefined ? this.readBundle(inc) : bundle;
+    const hits = [...this.knownIssues.values()].filter((ki) => ki.status !== 'retired' && kb.matches(ki, inc, b));
+    inc.knownIssues = hits.map((ki) => ki.id);
+    for (const ki of hits) {
+      if (!ki.occurrences.some((o) => o.incidentId === inc.id)) {
+        ki.occurrences.push({ incidentId: inc.id, label: inc.label, at: inc.pagedAt, resolvedAt: inc.resolvedAt || null });
+        ki.updatedAt = this.now();
+      }
+    }
+    return hits;
+  }
+
+  promoteToKnownIssue(inc, { by = 'unknown' } = {}) {
+    const issue = kb.draftFromIncident(inc, this.readBundle(inc), { by, now: this.now() });
+    this.knownIssues.set(issue.id, issue);
+    inc.knownIssues = [...new Set([...(inc.knownIssues || []), issue.id])];
+    inc.notes.push({ at: this.now(), by, action: 'promote', text: issue.id });
+    this.save();
+    this.emit('incident', inc);
+    return issue;
+  }
+
+  updateKnownIssue(id, patch, { by = 'unknown' } = {}) {
+    const issue = this.knownIssues.get(id);
+    if (!issue) return null;
+    for (const k of kb.EDITABLE) if (patch[k] !== undefined) issue[k] = patch[k];
+    issue.updatedAt = this.now();
+    issue.updatedBy = by;
+    // the signature may have changed: re-match open incidents
+    for (const inc of this.incidents.values()) if (!inc.resolvedAt && !inc.transient) this.matchKnownIssues(inc);
+    this.save();
+    return issue;
+  }
+
+  listKnownIssues({ q = '' } = {}) {
+    const needle = q.trim().toLowerCase();
+    return [...this.knownIssues.values()]
+      .filter((ki) => !needle || [ki.title, ki.key, ki.cause, ki.fix, ki.network, ...(ki.versions || [])].join(' ').toLowerCase().includes(needle))
+      .map((ki) => ({ ...ki, seen: ki.occurrences.length, nodes: new Set(ki.occurrences.map((o) => o.label)).size, lastSeen: Math.max(0, ...ki.occurrences.map((o) => o.at)) }))
+      .sort((a, b) => b.lastSeen - a.lastSeen);
+  }
+
+  // which zebrad versions the fleet runs, and where — the upgrade-outreach list
+  versions() {
+    const out = {};
+    for (const n of this.nodes.values()) {
+      const h = n.heartbeat;
+      const build = h && h.node && (h.node.build || h.node.version);
+      if (!build) continue;
+      (out[build] ||= []).push({ label: n.label, network: n.network, quiet: n.quiet });
+    }
+    return Object.entries(out).sort((a, b) => b[1].length - a[1].length).map(([build, nodes]) => ({ build, count: nodes.length, nodes }));
   }
 
   act(id, action, { by = 'unknown', text = null } = {}) {
@@ -311,6 +380,8 @@ class Store {
         if (!text) throw new Error('an improvement needs text');
         inc.improvements = inc.improvements || [];
         inc.improvements.push({ at: now, by, text });
+        break;
+      case 'promote':
         break;
       default:
         throw new Error(`unknown action ${action}`);
@@ -416,6 +487,8 @@ class Store {
       totals: { incidents: incidents.length, events: events.length, open: open.length, unacked: unacked.length, suppressed: suppressed.length, nodes: this.nodes.size, quietNodes: [...this.nodes.values()].filter((n) => n.quiet).length },
       // how many closed incidents left Zero better than they found it
       improvements: { closed: closed.length, withImprovement: withImprovement.length, rate: closed.length ? withImprovement.length / closed.length : null },
+      // the knowledge base doing its job: incidents that arrived with a known answer
+      knownIssues: { entries: this.knownIssues.size, matchedIncidents: incidents.filter((i) => i.knownIssues && i.knownIssues.length).length, matchRate: incidents.length ? incidents.filter((i) => i.knownIssues && i.knownIssues.length).length / incidents.length : null },
       bySeverity: count(incidents, 'severity'), byKey: count(incidents, 'key'), byNode: count(incidents, 'label'),
       latency: { detect, ack, respond, resolve, duration },
       oldestUnackedS: unacked.length ? Math.round((now - unacked[0].receivedAt) / 1000) : null,
@@ -479,9 +552,11 @@ function createCollector({ dir, quietMs = 60000, now = Date.now, publicDir = pat
     if (!inc) return res.status(404).json({ error: 'not found' });
     let bundle = null;
     try { bundle = JSON.parse(fs.readFileSync(path.join(store.dir, inc.latestBundleFile || inc.bundleFile), 'utf8')); } catch { /* no bundle */ }
+    const knownIssueDetails = (inc.knownIssues || []).map((id) => store.knownIssues.get(id)).filter(Boolean)
+      .map((ki) => ({ id: ki.id, title: ki.title, status: ki.status, cause: ki.cause, fix: ki.fix, workaround: ki.workaround, seen: ki.occurrences.length, nodes: new Set(ki.occurrences.map((o) => o.label)).size, fixedIn: ki.fixedIn || null }));
     // `at` is the collector clock now, so the page can tick an open stage's
     // duration against the same clock ackedAt/receivedAt are on
-    res.json({ ...inc, bundle, at: store.now() });
+    res.json({ ...inc, bundle, knownIssueDetails, at: store.now() });
   });
   app.get('/api/incidents/:id/report', (req, res) => {
     const inc = store.incidents.get(req.params.id);
@@ -501,6 +576,34 @@ function createCollector({ dir, quietMs = 60000, now = Date.now, publicDir = pat
     }
   });
   app.get('/api/series/:label', (req, res) => res.json(store.seriesFor(req.params.label, { windowMs: parseWindow(req.query.window) })));
+
+  app.get('/api/known-issues', (req, res) => res.json(store.listKnownIssues({ q: req.query.q || '' })));
+  app.get('/api/known-issues/:id', (req, res) => {
+    const ki = store.knownIssues.get(req.params.id);
+    if (!ki) return res.status(404).json({ error: 'not found' });
+    res.json(ki);
+  });
+  app.get('/api/known-issues/:id/export', (req, res) => {
+    const ki = store.knownIssues.get(req.params.id);
+    if (!ki) return res.status(404).json({ error: 'not found' });
+    res.type('text/markdown').send(kb.issueMarkdown(ki, { internal: req.query.internal === '1' }));
+  });
+  app.patch('/api/known-issues/:id', (req, res) => {
+    const ki = store.updateKnownIssue(req.params.id, req.body || {}, { by: (req.body && req.body.by) || 'unknown' });
+    if (!ki) return res.status(404).json({ error: 'not found' });
+    res.json(ki);
+  });
+  app.post('/api/incidents/:id/promote', (req, res) => {
+    const inc = store.incidents.get(req.params.id);
+    if (!inc) return res.status(404).json({ error: 'not found' });
+    res.json(store.promoteToKnownIssue(inc, { by: (req.body && req.body.by) || 'unknown' }));
+  });
+  app.post('/api/incidents/:id/match', (req, res) => {
+    const inc = store.incidents.get(req.params.id);
+    if (!inc) return res.status(404).json({ error: 'not found' });
+    res.json(store.matchKnownIssues(inc));
+  });
+  app.get('/api/versions', (req, res) => res.json(store.versions()));
   app.get('/bundles/*', (req, res) => res.sendFile(path.join(store.dir, 'bundles', req.params[0])));
 
   app.get('/', (req, res) => res.sendFile(path.join(publicDir, 'fleet.html')));
